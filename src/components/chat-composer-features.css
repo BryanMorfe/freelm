@@ -1,0 +1,207 @@
+.code-block-toolbar {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 8px 14px;
+	background: var(--panel);
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+}
+.code-copy {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	color: inherit;
+	background: transparent;
+	border: 0;
+	cursor: pointer;
+	font-size: var(--font-size-ui);
+}
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+	color: #c18af3;
+}
+.hljs-string,
+.hljs-regexp,
+.hljs-attribute {
+	color: #66bba8;
+}
+.hljs-number,
+.hljs-built_in,
+.hljs-type {
+	color: #d7a962;
+}
+.hljs-comment,
+.hljs-quote {
+	color: var(--muted);
+	font-style: italic;
+}
+.hljs-title,
+.hljs-function,
+.hljs-property {
+	color: #6fa9dc;
+}
+.message-content .katex-display {
+	overflow-x: auto;
+	overflow-y: hidden;
+	padding: 5px 0;
+}
+.message-content .katex {
+	font-size: 1.08em;
+}
+.message.user .message-footer {
+	justify-content: flex-end;
+	margin-top: 5px;
+}
+.message.user .message-actions {
+	margin-top: 0;
+}
+.message.user .message-content {
+	overflow-wrap: anywhere;
+}
+.message.user .message-attachments {
+	max-width: 100%;
+	justify-content: flex-end;
+}
+.message.user .message-edit {
+	max-width: 100%;
+}
+.message-edit textarea {
+	display: block;
+	width: 100%;
+	min-width: 280px;
+	min-height: 80px;
+	max-height: 600px;
+	field-sizing: content;
+	resize: vertical;
+	border: 1px solid var(--border);
+	background: var(--sidebar);
+	color: var(--text);
+	border-radius: 10px;
+	padding: 12px;
+	font: inherit;
+}
+.message-edit-actions {
+	display: flex;
+	gap: 8px;
+	justify-content: flex-end;
+	margin-top: 10px;
+}
+.message-versions {
+	display: inline-flex;
+	gap: 3px;
+	align-items: center;
+	color: var(--muted);
+	font-size: 11px;
+	white-space: nowrap;
+}
+.message-versions .icon-button {
+	width: 22px;
+	height: 25px;
+}
+.message-selection-reply {
+	position: fixed;
+	z-index: 1500;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 9px 12px;
+	border-radius: 9px;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	box-shadow: 0 4px 20px #0003;
+	color: var(--text);
+	font-size: var(--font-size-ui);
+}
+.composer-edit-banner {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+	padding: 2px 2px 12px;
+}
+.composer-edit-banner .icon-button {
+	margin-left: auto;
+}
+.attachment-document {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	max-width: 230px;
+	min-height: 48px;
+	padding: 9px 13px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	font-size: var(--font-size-ui);
+	color: var(--muted);
+	overflow: hidden;
+}
+.attachment-document span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.attachment-preview {
+	flex-wrap: wrap;
+}
+.dictation-settings {
+	display: grid;
+	gap: 16px;
+}
+.dictation-setting-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+}
+.dictation-settings .field-hint {
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.6;
+}
+.research-citation {
+	display: inline-flex;
+	position: relative;
+}
+.message-content .research-citation > a {
+	text-decoration: none;
+	background: #8882;
+	border-radius: 5px;
+	padding: 0 5px;
+	font-size: 0.85em;
+}
+.citation-preview {
+	display: none;
+	position: absolute;
+	left: 0;
+	top: 100%;
+	width: 260px;
+	max-width: 75vw;
+	z-index: 30;
+	padding: 12px;
+	background: var(--panel);
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	box-shadow: 0 4px 20px #0003;
+	color: var(--text);
+	font-size: 12px;
+	line-height: 1.5;
+}
+.research-citation:hover .citation-preview,
+.research-citation:focus-within .citation-preview {
+	display: grid;
+	gap: 5px;
+}
+.citation-preview span,
+.citation-preview small {
+	color: var(--muted);
+}
+.citation-preview strong {
+	font-size: var(--font-size-ui);
+}
+.message-composer-mention {
+	color: var(--accent);
+	display: inline;
+}

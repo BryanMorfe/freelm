@@ -1,0 +1,154 @@
+.computer-authorization {
+	padding: 10px 4px;
+	font-size: var(--font-size-ui);
+}
+.computer-authorization-heading {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.computer-authorization-heading img {
+	width: 24px;
+	height: 24px;
+	object-fit: contain;
+}
+.computer-authorization h3 {
+	margin: 0;
+	font-size: var(--font-size-ui);
+	font-weight: 500;
+}
+.computer-authorization p {
+	color: var(--muted);
+	line-height: 1.45;
+	margin: 10px 0 16px;
+}
+.computer-authorization-actions {
+	display: flex;
+	justify-content: flex-end;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+.computer-authorize-button {
+	border: 0;
+	border-radius: 999px;
+	background: #f4f4f4;
+	color: #181818;
+	font-size: var(--font-size-ui);
+	padding: 9px 16px;
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	cursor: pointer;
+}
+.computer-authorize-button:hover {
+	background: #fff;
+}
+.computer-authorize-button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+.computer-permission-status {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px 20px;
+	margin-bottom: 12px;
+}
+.computer-permission-status strong {
+	font-weight: 400;
+	color: var(--muted);
+	margin-left: 6px;
+}
+.computer-permission-setup .computer-setup-actions {
+	margin-bottom: 16px;
+}
+.composer-app-icon,
+.computer-app-icon {
+	width: 18px;
+	height: 18px;
+	object-fit: contain;
+	flex-shrink: 0;
+}
+.computer-previews {
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+	padding: 16px;
+}
+.computer-preview {
+	min-width: 0;
+}
+.computer-preview header {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	font-size: var(--font-size-ui);
+	margin-bottom: 9px;
+}
+.computer-preview header > span:first-of-type {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.computer-preview-state {
+	color: var(--muted);
+	font-size: 11px;
+}
+.computer-preview-image {
+	display: block;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	width: 100%;
+	cursor: zoom-in;
+}
+.computer-preview-image img {
+	display: block;
+	width: 100%;
+	max-height: 190px;
+	object-fit: contain;
+	border-radius: 8px;
+}
+.computer-preview .computer-stop {
+	flex-shrink: 0;
+	min-height: 30px;
+	padding: 5px 9px;
+	font-size: var(--font-size-ui);
+}
+.computer-preview-expanded {
+	position: fixed;
+	z-index: 100;
+	inset: 70px 24px 24px;
+	background: var(--bg, #181818);
+	border: 1px solid var(--border);
+	border-radius: 18px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	align-items: center;
+	padding: 16px;
+}
+.computer-preview-expanded img {
+	min-height: 0;
+	max-width: 100%;
+	flex: 1;
+	object-fit: contain;
+}
+.computer-preview-expanded button {
+	align-self: flex-end;
+}
+.composer[hidden] {
+	display: none;
+}
+
+.computer-setup-actions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+}
+
+.message-composer-mention img {
+	vertical-align: -3px;
+	margin-right: 4px;
+	object-fit: contain;
+}

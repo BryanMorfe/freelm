@@ -1,0 +1,45 @@
+.adaptive-composer-toolbar {
+	flex-wrap: nowrap;
+}
+.adaptive-composer-toolbar > .composer-tools,
+.adaptive-composer-toolbar > .composer-actions {
+	flex: 0 0 auto;
+	max-width: none;
+}
+.adaptive-composer-toolbar > .composer-actions {
+	margin-left: auto;
+}
+.adaptive-composer-toolbar > .composer-tools {
+	gap: 4px;
+}
+.adaptive-composer-toolbar .composer-tools > * {
+	flex-shrink: 0;
+}
+.adaptive-composer-toolbar[data-compact='permissions'] .code-permission-trigger,
+.adaptive-composer-toolbar[data-compact='icons'] .code-permission-trigger,
+.adaptive-composer-toolbar[data-compact='icons'] .composer-model-trigger {
+	width: 30px;
+	height: 30px;
+	min-height: 30px;
+	padding: 0;
+	gap: 0;
+	justify-content: center;
+	border-radius: 50%;
+}
+.adaptive-composer-toolbar[data-compact='permissions']
+	.code-permission-trigger
+	> .select-option-label,
+.adaptive-composer-toolbar[data-compact='icons'] .code-permission-trigger > .select-option-label,
+.adaptive-composer-toolbar[data-compact='permissions']
+	.code-permission-trigger
+	> .lucide-chevron-down,
+.adaptive-composer-toolbar[data-compact='icons'] .code-permission-trigger > .lucide-chevron-down,
+.adaptive-composer-toolbar[data-compact='icons']
+	.composer-model-trigger
+	> :not(.composer-model-icon) {
+	display: none;
+}
+.adaptive-composer-toolbar[data-compact='icons'] .composer-model-trigger > .composer-model-icon {
+	display: block;
+	color: var(--text);
+}

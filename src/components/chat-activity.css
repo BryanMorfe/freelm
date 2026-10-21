@@ -1,0 +1,163 @@
+.message-timeline {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 8px;
+	min-width: 0;
+}
+.message-timeline > .tool-call {
+	min-width: 0;
+}
+.message-live-text {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 16px;
+}
+.message-live-text:empty {
+	display: none;
+}
+.message-live-text > div {
+	min-width: 0;
+}
+.message-live-text .thought-tool-message {
+	font-size: 13px;
+}
+.thought-summary {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	padding: 2px 0;
+	color: var(--muted);
+	font-size: inherit;
+	line-height: 1.6;
+	text-align: left;
+	font-variant-numeric: tabular-nums;
+}
+button.thought-summary:hover {
+	color: var(--text);
+}
+.thought-summary-static {
+	cursor: default;
+}
+.thought-summary[aria-expanded='true'] svg {
+	transform: rotate(90deg);
+}
+.thought-history {
+	margin: 12px 0 4px;
+	padding: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 12px;
+	color: var(--muted);
+	font-size: 13px;
+}
+.thought-history > div {
+	min-width: 0;
+}
+.thought-assistant-message {
+	color: var(--text);
+	font-size: 14px;
+}
+.thought-reasoning {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+.thought-output-divider {
+	width: 100%;
+	margin: 12px 0;
+	border: 0;
+	border-top: 1px solid var(--border);
+}
+.thought-history .tool-call summary {
+	padding: 0;
+}
+.thought-history .tool-command {
+	margin: 8px 0;
+}
+.thought-history .tool-output,
+.thought-history .tool-arguments {
+	padding: 8px 0;
+}
+.working-status {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 10px 0;
+	color: var(--muted);
+	font-size: 13px;
+	font-variant-numeric: tabular-nums;
+	overflow-wrap: anywhere;
+}
+.working-status > span {
+	min-width: 0;
+}
+.message-timeline + .working-status {
+	margin-top: 12px;
+}
+.activity-shimmer {
+	color: var(--tertiary);
+}
+@supports (background-clip: text) {
+	.activity-shimmer {
+		background-image: linear-gradient(100deg, var(--tertiary), var(--text) 50%, var(--tertiary));
+		background-color: var(--tertiary);
+		background-repeat: no-repeat;
+		/* One narrow highlight crosses the text in 1s, then stays offscreen for 3s. */
+		background-size: 30% 100%;
+		background-clip: text;
+		-webkit-background-clip: text;
+		color: transparent;
+		animation: activity-shimmer 4s linear infinite;
+	}
+}
+@keyframes activity-shimmer {
+	/* A 30% band needs 30 / 70 of the track beyond each edge to leave the text fully. */
+	from {
+		background-position: -43% 0;
+	}
+	25%,
+	100% {
+		background-position: 143% 0;
+	}
+}
+.project-context .project-directory {
+	color: var(--muted);
+	font-family: ui-monospace, monospace;
+	max-width: min(44vw, 460px);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+	.activity-shimmer {
+		animation: none;
+		background: none;
+		color: var(--tertiary);
+	}
+	.tool-call .spin {
+		animation: none;
+	}
+}
+.message-context-menu {
+	position: fixed;
+	z-index: 120;
+	width: 180px;
+	padding: 5px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--sidebar);
+	box-shadow: 0 10px 35px #0003;
+}
+.message-context-menu button {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	width: 100%;
+	padding: 9px;
+	border-radius: 6px;
+	font-size: var(--font-size-ui);
+	text-align: left;
+}
+.message-context-menu button:hover {
+	background: var(--hover);
+}

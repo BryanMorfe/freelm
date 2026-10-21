@@ -1,0 +1,543 @@
+.app-shell {
+	--rail-width: 52px;
+	--history-width: 280px;
+	--titlebar-height: 44px;
+	--bg: #181818;
+	--sidebar: #202020;
+	--rail: #303030;
+	--chrome-border: #ffffff0b;
+	grid-template-columns: calc(var(--rail-width) + var(--history-width)) minmax(0, 1fr);
+	grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
+	background: var(--rail);
+}
+:root[data-theme='light'] .app-shell {
+	--bg: #fff;
+	--sidebar: #f7f7f7;
+	--rail: #ededed;
+	--chrome-border: #0000000c;
+}
+.app-shell.sidebar-hidden:not(.settings-open) {
+	grid-template-columns: var(--rail-width) minmax(0, 1fr);
+}
+.app-titlebar {
+	grid-column: 1 / -1;
+	grid-row: 1;
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	height: var(--titlebar-height);
+	background: var(--rail);
+	-webkit-app-region: drag;
+	z-index: 15;
+}
+.titlebar-controls {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	padding: 0 10px;
+	width: calc(var(--rail-width) + var(--history-width));
+	flex-shrink: 0;
+}
+.titlebar-controls .icon-button,
+.titlebar-actions .icon-button {
+	width: 28px;
+	height: 28px;
+	border-radius: 6px;
+}
+.mac-app .titlebar-controls {
+	padding-left: 104px;
+}
+.sidebar-hidden .titlebar-controls {
+	width: auto;
+}
+.titlebar-title {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	flex: 1;
+	min-width: 0;
+	padding: 0 18px;
+	font-size: var(--font-size-ui);
+	font-weight: 500;
+	line-height: 1.4;
+	border-left: 1px solid var(--chrome-border);
+}
+.titlebar-title span {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.titlebar-title svg {
+	color: var(--muted);
+	flex-shrink: 0;
+}
+.titlebar-actions {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding-right: 12px;
+	flex-shrink: 0;
+}
+.titlebar-actions .connection-select {
+	border: 0;
+	padding: 5px 7px;
+	max-width: 170px;
+	background: transparent;
+	font-size: var(--font-size-ui);
+}
+.titlebar-actions .connection-select:hover {
+	background: var(--hover);
+}
+.app-shell:not(.settings-open) > .sidebar {
+	grid-column: 1;
+	grid-row: 2;
+	display: flex;
+	padding: 0;
+	position: relative;
+	inset: auto;
+	width: auto;
+	min-width: 0;
+	min-height: 0;
+	background: var(--rail);
+	box-shadow: none;
+	flex-direction: row;
+	z-index: 10;
+}
+.app-shell:not(.settings-open) > .main-workspace {
+	grid-column: 2;
+	grid-row: 2;
+	background: var(--bg);
+}
+.app-shell.sidebar-hidden:not(.settings-open) > .main-workspace {
+	border-top-left-radius: 12px;
+}
+.navigation-rail {
+	width: var(--rail-width);
+	flex-shrink: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 7px;
+	padding: 8px 6px;
+	background: var(--rail);
+}
+.navigation-rail .rail-nav,
+.rail-bottom {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+}
+.navigation-rail .rail-button {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 38px;
+	height: 36px;
+	min-height: 36px;
+	padding: 0;
+	border-radius: 8px;
+	color: var(--muted);
+	flex-shrink: 0;
+}
+.navigation-rail .rail-button:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+.navigation-rail .rail-button.active {
+	color: var(--text);
+	background: #ffffff12;
+}
+:root[data-theme='light'] .navigation-rail .rail-button.active {
+	background: #0000000a;
+}
+.navigation-rail svg {
+	stroke-width: 1.8px;
+}
+.rail-bottom {
+	margin-top: auto;
+}
+.sidebar-panel {
+	display: flex;
+	flex-direction: column;
+	width: var(--history-width);
+	min-width: 0;
+	min-height: 0;
+	border-right: 1px solid var(--chrome-border);
+	background: var(--sidebar);
+	border-top-left-radius: 12px;
+}
+.sidebar-panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	height: 48px;
+	padding: 0 13px 0 8px;
+	flex-shrink: 0;
+}
+.sidebar-panel-header .sidebar-mode-picker {
+	min-height: 34px;
+	padding: 5px 9px;
+	gap: 6px;
+	border: 0;
+	border-radius: 9px;
+	background: transparent;
+	font-size: 16px;
+	font-weight: 550;
+	letter-spacing: -0.25px;
+}
+.sidebar-panel-header .sidebar-mode-picker > svg:last-child {
+	width: 12px;
+	height: 12px;
+	transform: translateY(1px);
+}
+.sidebar-panel-actions {
+	display: flex;
+	align-items: center;
+	gap: 3px;
+}
+.sidebar-panel-actions .icon-button {
+	width: 26px;
+	height: 26px;
+}
+.sidebar-panel .primary-nav {
+	margin: 0 10px 9px;
+}
+.sidebar-panel .primary-nav > button {
+	padding: 7px 8px;
+	min-height: 32px;
+	font-size: var(--font-size-ui);
+	gap: 9px;
+}
+.sidebar-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow-y: auto;
+	overflow-x: hidden;
+	overscroll-behavior: contain;
+	padding: 0 10px 16px;
+	scrollbar-width: thin;
+	scrollbar-color: #8883 transparent;
+}
+.sidebar-panel .sidebar-section {
+	margin-bottom: 14px;
+}
+.sidebar-panel .section-heading {
+	padding: 0 6px;
+	min-height: 28px;
+	margin: 0 0 3px;
+}
+.sidebar-panel .projects-section > .section-heading {
+	padding-right: 2px;
+}
+.sidebar-panel .projects-section > .section-heading > .icon-button {
+	width: 24px;
+}
+.sidebar-panel .section-label {
+	font-size: var(--font-size-ui);
+	font-weight: 400;
+	letter-spacing: 0;
+}
+.sidebar-section-toggle {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	min-height: 28px;
+	padding: 0;
+	text-align: left;
+	color: var(--muted);
+}
+.sidebar-section-toggle:hover {
+	color: var(--text);
+}
+.sidebar-section-toggle > svg {
+	flex-shrink: 0;
+	transition: transform 0.15s ease;
+}
+.sidebar-section-toggle[aria-expanded='false'] > svg {
+	transform: rotate(-90deg);
+}
+.sidebar-section-content[hidden] {
+	display: none;
+}
+@media (prefers-reduced-motion: reduce) {
+	.sidebar-section-toggle > svg {
+		transition: none;
+	}
+}
+.sidebar-panel .project-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 24px 24px;
+	align-items: center;
+	min-height: 32px;
+	border-radius: 6px;
+}
+.sidebar-panel .project-row .project-select {
+	grid-column: 1;
+	grid-row: 1;
+	min-width: 0;
+	padding: 6px 7px;
+	min-height: 32px;
+	gap: 8px;
+	font-size: var(--font-size-ui);
+	border-radius: 6px;
+}
+.sidebar-panel .project-select svg {
+	flex-shrink: 0;
+}
+.sidebar-panel .project-row .row-menu {
+	grid-column: 3;
+	grid-row: 1;
+	position: static;
+	width: 24px;
+	height: 26px;
+}
+.sidebar-panel .project-row .project-select.active,
+.sidebar-panel .project-row .project-select:hover {
+	background: transparent;
+}
+.sidebar-panel .project-row:hover,
+.sidebar-panel .project-row:focus-within {
+	background: var(--hover);
+}
+.project-new-chat {
+	grid-column: 2;
+	grid-row: 1;
+	width: 24px;
+	height: 26px;
+	padding: 0;
+	opacity: 0;
+	pointer-events: none;
+}
+.project-new-chat[aria-expanded="true"],
+.project-row:hover .project-new-chat,
+.project-row:focus-within .project-new-chat {
+	opacity: 1;
+	pointer-events: auto;
+}
+.is-drop-target {
+	outline: 1px solid var(--accent);
+	background: color-mix(in srgb, var(--accent) 12%, transparent) !important;
+	border-radius: 7px;
+}
+.sidebar-show-more {
+	display: block;
+	padding: 7px 8px;
+	font-size: var(--font-size-ui);
+	color: var(--muted);
+	text-align: left;
+	border-radius: 6px;
+}
+.sidebar-show-more:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+.move-project-list {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+.move-project-list > button {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px;
+	text-align: left;
+	border-radius: 8px;
+}
+.move-project-list > button:hover {
+	background: var(--hover);
+}
+.app-shell.settings-open {
+	grid-template-columns: var(--rail-width) minmax(0, 1fr);
+	grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
+}
+.settings-open > .settings-rail {
+	grid-column: 1;
+	grid-row: 2;
+	display: flex;
+	flex-direction: row;
+	padding: 0;
+	width: var(--rail-width);
+	background: var(--rail);
+}
+.settings-open > .settings-page {
+	grid-column: 2;
+	grid-row: 2;
+	height: 100%;
+	grid-template-columns: var(--history-width) minmax(0, 1fr);
+	background: var(--rail);
+}
+.settings-open .settings-main {
+	background: var(--bg);
+}
+.settings-open .titlebar-controls {
+	width: calc(var(--rail-width) + var(--history-width));
+}
+.settings-open .settings-sidebar {
+	padding-top: 16px;
+	border-top-left-radius: 12px;
+}
+.mac-app.settings-open .settings-page::before {
+	display: none;
+}
+@media (max-width: 700px) {
+	.settings-open > .settings-page {
+		grid-template-columns: 116px minmax(0, 1fr);
+	}
+	.settings-open .titlebar-controls {
+		width: var(--rail-width);
+	}
+}
+.sidebar-panel .project-threads {
+	margin-left: 0;
+	margin-bottom: 5px;
+}
+.sidebar-panel .history-section {
+	flex: 0 0 auto;
+	min-height: 0;
+	margin-top: 15px;
+}
+.sidebar-panel .history-list {
+	flex: initial;
+	overflow: visible;
+}
+.sidebar-panel .thread-row {
+	min-height: 31px;
+	border-radius: 6px;
+}
+.sidebar-panel .thread-row.active {
+	background: #ffffff0c;
+}
+:root[data-theme='light'] .sidebar-panel .thread-row.active {
+	background: #00000008;
+}
+.sidebar-panel .thread-row:hover,
+.sidebar-panel .thread-row:focus-within,
+.sidebar-panel .thread-row.menu-open {
+	background: var(--hover);
+}
+.sidebar-panel .thread-select {
+	padding: 6px 8px;
+	font-size: var(--font-size-ui);
+	line-height: 19px;
+}
+.sidebar-panel .project-threads .thread-select {
+	padding-left: 30px;
+}
+.sidebar-panel .thread-select span {
+	flex: 1;
+}
+.sidebar-panel .thread-row .row-menu {
+	width: 24px;
+	height: 26px;
+	margin-right: 2px;
+}
+.sidebar-panel .project-row > button,
+.sidebar-panel .project-row > button:hover,
+.sidebar-panel .thread-row > button,
+.sidebar-panel .thread-row > button:hover {
+	background: transparent;
+}
+.sidebar-panel .row-menu {
+	pointer-events: none;
+}
+.sidebar-panel .row-menu:focus,
+.sidebar-panel .project-row:hover .row-menu,
+.sidebar-panel .thread-row:hover .row-menu,
+.sidebar-panel .project-row:focus-within .row-menu,
+.sidebar-panel .thread-row:focus-within .row-menu,
+.sidebar-panel .thread-row.menu-open .row-menu {
+	opacity: 1;
+	pointer-events: auto;
+}
+.sidebar-panel .empty-history {
+	padding: 7px 8px;
+	font-size: 12px;
+	max-width: none;
+	line-height: 1.6;
+	margin-bottom: 0;
+}
+.thread-menu-floating {
+	position: fixed;
+	right: auto;
+	top: auto;
+}
+.app-shell:not(.settings-open) .chat-workspace {
+	background: var(--bg);
+}
+.app-shell:not(.settings-open) .image-workspace-header,
+.app-shell:not(.settings-open) .media-header {
+	min-height: 60px;
+	padding-top: 0;
+	-webkit-app-region: no-drag;
+}
+.app-shell:not(.settings-open) .image-provider {
+	top: 17px;
+}
+.app-shell:not(.settings-open) .media-header {
+	padding-left: 28px;
+}
+@media (max-width: 1000px) {
+	.app-shell:not(.settings-open) {
+		--history-width: 250px;
+	}
+}
+@media (max-width: 700px) {
+	.app-shell:not(.settings-open) {
+		--rail-width: 48px;
+		--history-width: 260px;
+		grid-template-columns: var(--rail-width) minmax(0, 1fr);
+	}
+	.app-shell:not(.settings-open) > .sidebar {
+		width: var(--rail-width);
+		z-index: 20;
+	}
+	.sidebar-panel {
+		position: absolute;
+		inset: 0 auto 0 var(--rail-width);
+		box-shadow: 12px 0 30px #0003;
+	}
+	.titlebar-controls {
+		width: auto;
+		padding: 0 6px;
+		gap: 0;
+	}
+	.mac-app .titlebar-controls {
+		padding-left: 92px;
+	}
+	.titlebar-title {
+		padding: 0 8px;
+	}
+	.titlebar-title svg {
+		display: none;
+	}
+	.titlebar-actions {
+		padding-right: 6px;
+	}
+	.titlebar-actions .connection-select {
+		max-width: 105px;
+	}
+	.navigation-rail .rail-button {
+		width: 34px;
+		height: 34px;
+		min-height: 34px;
+	}
+	.app-shell:not(.settings-open) .composer-area,
+	.app-shell:not(.settings-open) .messages {
+		width: calc(100% - 24px);
+	}
+	.app-shell:not(.settings-open) .composer {
+		border-radius: 18px;
+		padding-left: 10px;
+		padding-right: 10px;
+	}
+	.app-shell:not(.settings-open) .suggestions {
+		flex-wrap: wrap;
+	}
+}

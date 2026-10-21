@@ -1,0 +1,218 @@
+.markdown-composer-shell {
+	position: relative;
+	min-width: 0;
+}
+.composer-completions {
+	position: absolute;
+	z-index: 30;
+	bottom: calc(100% + 12px);
+	left: 0;
+	width: min(520px, 100%);
+	padding: 6px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+	background: var(--panel, var(--sidebar));
+	box-shadow: 0 10px 32px #0003;
+	font-size: var(--font-size-ui);
+	line-height: 1.4;
+}
+.composer-completions-heading {
+	padding: 5px 10px 7px;
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+	font-weight: 500;
+}
+.composer-completions-items {
+	max-height: min(280px, 38dvh);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+.composer-completion {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	min-width: 0;
+	padding: 7px 10px;
+	border: none;
+	border-radius: 9px;
+	background: transparent;
+	color: var(--text);
+	text-align: left;
+	font-size: var(--font-size-ui);
+	line-height: 1.4;
+	cursor: pointer;
+}
+.composer-completion.selected,
+.composer-completion:hover {
+	background: var(--hover);
+}
+.composer-completion > svg,
+.composer-completion > img {
+	flex: 0 0 auto;
+	align-self: center;
+	margin: 0;
+	color: var(--muted);
+}
+.composer-completion-copy {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	min-width: 0;
+	width: 100%;
+}
+.composer-completion-label {
+	flex: 0 1 auto;
+	max-width: 60%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-size: var(--font-size-ui);
+	font-weight: 500;
+}
+.composer-completion-description {
+	flex: 1;
+	min-width: 0;
+	color: var(--muted);
+	font-size: 12px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+	overflow: hidden;
+}
+.composer-completion-status {
+	padding: 8px 10px;
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+}
+.cm-composer-mention {
+	display: inline-flex;
+	align-items: baseline;
+	gap: 3px;
+	max-width: 100%;
+	padding: 0 3px;
+	border-radius: 5px;
+	background: color-mix(in srgb, var(--accent) 10%, transparent);
+	color: var(--accent);
+	font-size: inherit;
+	white-space: nowrap;
+	vertical-align: baseline;
+}
+.cm-composer-mention-icon {
+	font-size: 0.9em;
+}
+.markdown-composer {
+	min-width: 0;
+	font-size: 15px;
+	line-height: 1.7;
+}
+.markdown-composer .cm-editor {
+	background: transparent;
+	color: var(--text);
+}
+.markdown-composer .cm-editor.cm-focused {
+	outline: none;
+}
+.markdown-composer .cm-scroller {
+	font: inherit;
+	max-height: min(600px, calc(100dvh - 220px));
+	overflow: auto;
+	overscroll-behavior: contain;
+}
+.markdown-composer .cm-content {
+	padding: 0;
+	min-height: 41px;
+	caret-color: var(--text);
+}
+.markdown-composer .cm-line {
+	padding: 0 5px;
+}
+.markdown-composer .cm-placeholder {
+	color: var(--muted);
+	/* An inline block makes the native caret as tall as a wrapped placeholder. */
+	display: inline;
+	vertical-align: baseline;
+}
+.markdown-composer .cm-composer-code-line {
+	background: var(--sidebar);
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 13px;
+	line-height: 1.7;
+	padding: 0 12px;
+}
+.markdown-composer .cm-composer-code-header {
+	display: block;
+	padding: 6px 12px;
+	background: var(--sidebar);
+	border-radius: 8px 8px 0 0;
+	color: var(--muted);
+	font-family: inherit;
+	font-size: 11px;
+	line-height: 1.5;
+}
+.markdown-composer .cm-composer-code-footer {
+	display: block;
+	height: 8px;
+	background: var(--sidebar);
+	border-radius: 0 0 8px 8px;
+}
+.markdown-composer .cm-composer-math {
+	display: inline-block;
+	max-width: 100%;
+	vertical-align: baseline;
+	cursor: text;
+	border-radius: 4px;
+	color: var(--text);
+}
+.markdown-composer .cm-composer-math-display {
+	display: block;
+	padding: 8px 0;
+}
+.markdown-composer .cm-composer-math:hover {
+	background: var(--hover);
+}
+.markdown-composer .cm-composer-math .katex {
+	font-size: 1.08em;
+}
+.markdown-composer .cm-composer-math .katex-display {
+	margin: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+}
+.markdown-composer .cm-composer-math-source {
+	color: var(--text);
+	background: var(--sidebar);
+}
+.markdown-composer .cm-composer-strong {
+	font-weight: 700;
+}
+.markdown-composer .cm-composer-em {
+	font-style: italic;
+}
+.markdown-composer .cm-composer-strike {
+	text-decoration: line-through;
+}
+.markdown-composer .cm-composer-inline-code {
+	font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	font-size: 0.9em;
+	background: var(--sidebar);
+	border-radius: 4px;
+	padding: 1px 3px;
+}
+.markdown-composer .cm-composer-heading {
+	font-weight: 600;
+}
+.markdown-composer .cm-composer-quote-line {
+	color: var(--muted);
+	border-left: 2px solid var(--border);
+	padding-left: 12px;
+}
+.markdown-composer .cm-composer-link {
+	color: var(--accent);
+	text-decoration: underline;
+}
+.markdown-composer .cm-composer-fence-line {
+	padding: 0;
+}
+.composer-editor-loading {
+	min-height: 41px;
+}

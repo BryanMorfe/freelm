@@ -1,0 +1,223 @@
+.file-edit-summary {
+	min-width: 0;
+	max-width: 100%;
+	margin-top: 12px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--sidebar);
+	overflow: hidden;
+}
+.file-edit-summary-header {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 12px;
+	border-bottom: 1px solid var(--border);
+	background: color-mix(in srgb, var(--sidebar) 98%, white);
+}
+.file-edit-summary-icon {
+	display: grid;
+	place-items: center;
+	width: 38px;
+	height: 38px;
+	flex-shrink: 0;
+	border-radius: 10px;
+	background: var(--bg);
+	color: var(--text);
+}
+.file-edit-summary-title {
+	font-size: 14px;
+	color: var(--text);
+	line-height: 1.3;
+	margin: 0;
+}
+.file-edit-summary-heading {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+}
+.file-edit-summary-heading .file-edit-counts {
+	line-height: 1.25;
+}
+.file-edit-counts {
+	display: inline-flex;
+	gap: 5px;
+	white-space: nowrap;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	flex: 0 0 auto;
+}
+.file-edit-added {
+	color: #58bb82;
+}
+.file-edit-removed {
+	color: #e67e84;
+}
+.file-edit-summary-list {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 0;
+	padding: 4px 0;
+}
+.file-edit-summary-row {
+	display: flex;
+	align-items: center;
+	gap: 14px;
+	min-width: 0;
+	width: 100%;
+	padding: 3px 13px;
+	text-align: left;
+	font-size: 13px;
+	color: var(--text);
+}
+.file-edit-summary-row:hover,
+.file-edit-summary-row:focus-visible,
+.file-edit-summary-row[aria-expanded='true'] {
+	background: var(--hover);
+}
+.file-edit-name {
+	display: block;
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.file-edit-directory {
+	color: var(--muted);
+}
+.file-edit-summary-more {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: 100%;
+	padding: 8px 13px;
+	border-top: 1px solid var(--border);
+	text-align: left;
+	font-size: 13px;
+	color: var(--muted);
+	background: color-mix(in srgb, var(--sidebar) 94%, white);
+}
+.file-edit-summary-more:hover {
+	color: var(--text);
+	background: color-mix(in srgb, var(--sidebar) 90%, white);
+}
+:root[data-theme='light'] .file-edit-summary-more {
+	background: var(--bg);
+}
+:root[data-theme='light'] .file-edit-summary-more:hover {
+	background: var(--hover);
+}
+.file-edit-preview {
+	position: fixed;
+	z-index: 180;
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	max-width: 100%;
+	max-height: 480px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: var(--sidebar);
+	color: var(--text);
+	box-shadow: 0 14px 40px #0005;
+	overflow: hidden;
+	outline: none;
+}
+.file-edit-preview-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--border);
+	flex-shrink: 0;
+	font-size: var(--font-size-ui);
+}
+.file-edit-preview-header > .icon-button {
+	flex-shrink: 0;
+}
+.file-edit-preview-scroll {
+	min-width: 0;
+	min-height: 0;
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: none;
+	font:
+		11px/1.7 ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		Monaco,
+		Consolas,
+		monospace;
+}
+.file-edit-preview-scroll::-webkit-scrollbar {
+	display: none;
+}
+.file-edit-preview-note {
+	margin: 0;
+	padding: 8px 12px;
+	color: var(--muted);
+	font:
+		11px/1.5 -apple-system,
+		BlinkMacSystemFont,
+		sans-serif;
+	overflow-wrap: anywhere;
+}
+.file-edit-preview-section + .file-edit-preview-section {
+	border-top: 1px solid var(--border);
+}
+.file-edit-preview-section-title {
+	padding: 5px 12px;
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+}
+.file-edit-diff-lines {
+	width: max-content;
+	min-width: 100%;
+}
+.file-edit-diff-line {
+	display: grid;
+	grid-template-columns: 42px minmax(0, 1fr);
+	min-width: 100%;
+}
+.file-edit-line-number {
+	padding: 0 8px 0 4px;
+	text-align: right;
+	color: var(--muted);
+	user-select: none;
+}
+.file-edit-diff-line > code {
+	padding: 0 12px 0 4px;
+	font: inherit;
+	white-space: pre;
+	background: transparent;
+	color: inherit;
+}
+.file-edit-diff-added {
+	color: #58bb82;
+	background: #58bb8212;
+}
+.file-edit-diff-removed {
+	color: #e67e84;
+	background: #e67e8412;
+}
+:root[data-theme='light'] .file-edit-added,
+:root[data-theme='light'] .file-edit-diff-added {
+	color: #218849;
+}
+:root[data-theme='light'] .file-edit-removed,
+:root[data-theme='light'] .file-edit-diff-removed {
+	color: #c3434a;
+}
+:root[data-theme='light'] .file-edit-diff-added {
+	background: #21884912;
+}
+:root[data-theme='light'] .file-edit-diff-removed {
+	background: #c3434a12;
+}
+.file-edit-diff-context {
+	color: var(--text);
+}
+.file-edit-diff-hunk {
+	color: var(--muted);
+}

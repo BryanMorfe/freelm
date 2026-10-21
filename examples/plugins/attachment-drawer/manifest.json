@@ -1,0 +1,34 @@
+{
+	"manifestVersion": 2,
+	"id": "dev.freelm.attachment-drawer",
+	"name": "Attachment Drawer",
+	"version": "1.0.0",
+	"description": "A general drawer extension that creates a report and lets you attach it to the current draft. No conversation reading or inference is needed.",
+	"author": "FreeLM example",
+	"auth": { "type": "none" },
+	"runtime": { "apiVersion": 2, "entry": "src/index.ts" },
+	"permissions": {
+		"network": [],
+		"storage": false,
+		"capabilities": [
+			"composer.state",
+			"composer.drawer",
+			"composer.attachments",
+			"assets.create",
+			"commands"
+		]
+	},
+	"contributes": {
+		"activation": { "surfaces": ["home.chat", "home.code"] },
+		"settings": [
+			{
+				"id": "report",
+				"type": "text",
+				"multiline": true,
+				"label": "Report content",
+				"maxLength": 8000,
+				"default": "A report prepared by the Attachment Drawer plugin."
+			}
+		]
+	}
+}

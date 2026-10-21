@@ -1,0 +1,139 @@
+.edited-files-activity,
+.edited-files-list,
+.edited-file-detail {
+	min-width: 0;
+	max-width: 100%;
+}
+.tool-call .edited-files-activity > summary {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	padding: 0;
+	color: var(--activity-color, var(--muted));
+	font-size: 13px;
+	min-width: 0;
+	max-width: 100%;
+}
+.edited-files-activity > summary:hover,
+.edited-file-detail > summary:hover {
+	color: var(--text);
+}
+.tool-call .edited-files-activity > summary > .edited-files-label,
+.tool-status-line > .edited-files-label {
+	display: inline-block;
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.edited-file-path {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.edited-files-counts {
+	display: inline-flex;
+	gap: 5px;
+	font-variant-numeric: tabular-nums;
+	white-space: nowrap;
+	font-size: 12px;
+}
+.tool-call summary .edited-files-counts,
+.tool-call summary .edited-file-action,
+.tool-call summary .edited-files-counts > span {
+	flex: 0 0 auto;
+}
+.edited-lines-added {
+	color: #58bb82;
+}
+.edited-lines-removed {
+	color: #e67e84;
+}
+.edited-files-chevron {
+	flex: 0 0 auto;
+	align-self: center;
+}
+.edited-files-activity[open] > summary > .edited-files-chevron,
+.edited-file-detail[open] > summary > .edited-files-chevron {
+	transform: rotate(90deg);
+}
+.edited-files-list {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 7px;
+	margin-top: 10px;
+	padding-left: 23px;
+}
+.edited-file-row {
+	display: flex;
+	align-items: center;
+	flex-wrap: nowrap;
+	gap: 7px;
+	min-width: 0;
+	max-width: 100%;
+	font-size: var(--font-size-ui);
+}
+.edited-file-row > svg {
+	flex-shrink: 0;
+}
+.edited-file-row > .edited-file-path {
+	flex: 1;
+}
+.edited-file-action {
+	flex-shrink: 0;
+	color: var(--muted);
+	font-size: 11px;
+}
+.edited-file-note {
+	margin: 0;
+	color: var(--muted);
+	font-size: 11px;
+	line-height: 1.5;
+}
+.edited-file-row > .edited-file-note {
+	font-size: 10px;
+	min-width: 0;
+}
+.edited-file-diff {
+	max-width: 100%;
+	min-width: 0;
+	max-height: 320px;
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: none;
+	margin: 8px 0 0;
+	padding: 10px 12px;
+	border-radius: 7px;
+	background: var(--hover);
+	font:
+		11px/1.6 ui-monospace,
+		SFMono-Regular,
+		Menlo,
+		Monaco,
+		Consolas,
+		monospace;
+	white-space: pre;
+}
+.edited-file-diff::-webkit-scrollbar {
+	display: none;
+}
+.edited-file-diff > code {
+	font: inherit;
+	white-space: inherit;
+	background: none;
+	padding: 0;
+}
+.edited-diff-added {
+	color: #58bb82;
+}
+.edited-diff-removed {
+	color: #e67e84;
+}
+.edited-diff-context,
+.edited-diff-hunk {
+	color: var(--muted);
+}

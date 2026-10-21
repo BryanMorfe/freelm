@@ -1,0 +1,122 @@
+.instance-context-bar {
+	height: 36px;
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	padding: 0 24px;
+	background: var(--sidebar);
+	border-bottom: 1px solid var(--border);
+	font-size: 11px;
+	color: var(--muted);
+	-webkit-app-region: drag;
+}
+.instance-context-bar > svg {
+	color: var(--accent);
+}
+.instance-context-bar > button {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--font-size-ui);
+	color: var(--text);
+	padding: 4px 0;
+}
+.instance-context-bar > button:last-child {
+	margin-left: auto;
+	color: var(--muted);
+}
+.has-instance-bar > .chat-workspace,
+.has-instance-bar > .conversation-layout,
+.has-instance-bar > .media-workspace {
+	height: calc(100% - 36px);
+}
+.has-instance-bar > .expand-sidebar {
+	top: 55px;
+}
+.conversation-layout {
+	height: 100%;
+	min-height: 0;
+	min-width: 0;
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	position: relative;
+}
+.conversation-layout.sources-open {
+	grid-template-columns: minmax(0, 1fr) 300px;
+}
+.conversation-layout > .chat-workspace {
+	min-height: 0;
+	min-width: 0;
+}
+.conversation-inspector {
+	min-width: 0;
+	min-height: 0;
+	align-self: start;
+	max-height: calc(100% - 24px);
+	margin: 12px 12px 12px 0;
+	overflow: auto;
+	background: var(--panel);
+	border-radius: 14px;
+}
+.titlebar-summary-toggle[aria-pressed='true'] {
+	background: var(--hover);
+	color: var(--text);
+}
+@media (max-width: 1179px) {
+	.conversation-layout.sources-open {
+		grid-template-columns: minmax(0, 1fr);
+		grid-template-rows: minmax(0, 1fr) minmax(0, min(28%, 220px));
+	}
+	.conversation-inspector {
+		align-self: stretch;
+		max-height: 100%;
+		margin: 0 12px 12px;
+	}
+}
+.workspace-switching {
+	position: absolute;
+	inset: 0;
+	z-index: 40;
+	background: var(--bg);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	font-size: var(--font-size-ui);
+	color: var(--muted);
+}
+.instance-context-bar ~ .storage-error {
+	top: 36px;
+}
+.backup-notice {
+	position: absolute;
+	left: 20px;
+	right: 20px;
+	bottom: 20px;
+	z-index: 25;
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 12px 16px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--sidebar);
+	color: var(--text);
+	font-size: var(--font-size-ui);
+	box-shadow: 0 6px 24px #0003;
+}
+.backup-notice > span {
+	flex: 1;
+	overflow-wrap: anywhere;
+}
+.backup-notice code {
+	user-select: text;
+}
+@media (max-width: 700px) {
+	.instance-context-bar {
+		padding: 0 15px;
+	}
+	.instance-context-bar > span {
+		display: none;
+	}
+}

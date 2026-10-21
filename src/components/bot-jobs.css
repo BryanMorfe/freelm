@@ -1,0 +1,133 @@
+.bots-composer-area {
+	container-type: inline-size;
+}
+.bot-jobs {
+	border: 1px solid var(--border);
+	border-radius: 16px;
+	background: var(--panel);
+	margin: 0 0 8px;
+	max-height: min(320px, 38vh);
+	overflow-y: auto;
+}
+.bot-job + .bot-job {
+	border-top: 1px solid var(--border);
+}
+.bot-job-line {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+}
+.bot-job-summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex: 1;
+	min-width: 0;
+	padding: 2px;
+	font-size: var(--font-size-ui);
+	text-align: left;
+	color: var(--text);
+	background: transparent;
+}
+.bot-job-summary > svg {
+	flex-shrink: 0;
+	color: var(--muted);
+}
+.bot-job-summary > svg.expanded {
+	transform: rotate(180deg);
+}
+.bot-job-title {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.bot-job-status {
+	color: var(--muted);
+	white-space: nowrap;
+	font-size: var(--font-size-ui);
+}
+.bot-job-error .bot-job-summary,
+.bot-job-error .bot-job-status,
+.bot-job-error .bot-job-summary > svg,
+.bot-job-error-text,
+.bot-job-action-error {
+	color: var(--danger);
+}
+.bot-job-actions {
+	display: flex;
+	flex-shrink: 0;
+	gap: 6px;
+}
+.bot-job-actions > button {
+	min-height: 28px;
+	padding: 3px 9px;
+	font-size: var(--font-size-ui);
+}
+.bot-job-detail {
+	padding: 0 14px 10px;
+	font-size: var(--font-size-ui);
+}
+.bot-job-detail p {
+	margin: 6px 0;
+	color: var(--muted);
+	line-height: 1.45;
+}
+.bot-job-detail p.bot-job-error-text {
+	color: var(--danger);
+}
+.bot-job-detail code {
+	font-size: 12px;
+	overflow-wrap: anywhere;
+}
+.bot-job-detail pre {
+	margin: 6px 0;
+	padding: 8px;
+	max-height: 180px;
+	overflow: auto;
+	border-radius: 8px;
+	background: var(--bg);
+	font-size: 12px;
+}
+.bot-job-action-error {
+	margin: 0;
+	padding: 0 12px 10px;
+	font-size: var(--font-size-ui);
+}
+.bot-jobs-history {
+	margin-top: 18px;
+	max-height: none;
+}
+.bot-jobs-history > h3 {
+	padding: 10px 12px 0;
+	font-size: var(--font-size-ui);
+}
+.bot-jobs-history .bot-job-line {
+	flex-wrap: wrap;
+}
+.bot-jobs-history .bot-job-summary {
+	flex-basis: 100%;
+}
+.bot-job-spinner {
+	animation: bot-job-spin 1.2s linear infinite;
+}
+@keyframes bot-job-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.bot-job-spinner {
+		animation: none;
+	}
+}
+@container (max-width: 440px) {
+	.bot-job-line {
+		flex-wrap: wrap;
+	}
+	.bot-job-summary {
+		flex-basis: 100%;
+	}
+}

@@ -1,0 +1,35 @@
+.bot-message-body,
+.bot-message-body-content,
+.bot-message-body-markdown {
+	min-width: 0;
+}
+
+.bot-message-body-markdown {
+	display: flow-root;
+}
+
+.bot-message-body-content[data-collapsed='true'] {
+	max-height: var(--bot-message-preview-height, calc(10 * 1lh));
+	overflow: clip;
+	mask-image: linear-gradient(to bottom, #000 calc(100% - 1lh), transparent);
+}
+
+.bot-message-body-toggle {
+	display: block;
+	margin: 5px 0 0;
+	padding: 1px 0;
+	border: 0;
+	border-radius: 3px;
+	background: transparent;
+	color: var(--muted);
+	font-family: inherit;
+	font-size: var(--font-size-ui);
+	line-height: 1.5;
+	text-align: left;
+	cursor: pointer;
+}
+
+.bot-message-body-toggle:hover,
+.bot-message-body-toggle:focus-visible {
+	color: var(--text);
+}

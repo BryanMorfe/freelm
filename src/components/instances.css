@@ -1,0 +1,489 @@
+.workspace-switcher {
+	display: flex;
+	align-items: center;
+	gap: 9px;
+	margin: 0 13px 10px;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	font-size: var(--font-size-ui);
+	text-align: left;
+}
+.workspace-switcher:hover {
+	background: var(--hover);
+}
+.workspace-switcher > span:first-of-type {
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.workspace-switcher svg {
+	flex-shrink: 0;
+	color: var(--muted);
+}
+.workspace-remote-dot,
+.instance-sharing-status > span {
+	height: 6px;
+	width: 6px;
+	border-radius: 50%;
+	background: var(--accent);
+	flex-shrink: 0;
+}
+.instances-modal {
+	width: min(720px, 100%);
+	max-height: calc(100dvh - 60px);
+	display: flex;
+	flex-direction: column;
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: 17px;
+	box-shadow: 0 24px 120px #0005;
+	overflow: hidden;
+}
+.instances-body {
+	overflow-y: auto;
+	padding: 22px;
+	display: flex;
+	flex-direction: column;
+	gap: 23px;
+}
+.instances-embedded,
+.instances-panel {
+	min-width: 0;
+}
+.instances-embedded .instances-body {
+	padding: 0;
+	overflow: visible;
+}
+.instances-intro {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.8;
+	color: var(--muted);
+	max-width: 590px;
+}
+.instance-section {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.instance-section-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+.instance-section-heading h3,
+.instance-details h3 {
+	margin: 0;
+	font-size: 13px;
+	font-weight: 550;
+}
+.instance-card {
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: var(--sidebar);
+	overflow: hidden;
+}
+.instance-row {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	padding: 16px;
+}
+.instance-icon {
+	width: 36px;
+	height: 36px;
+	background: var(--panel);
+	border-radius: 10px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+	color: var(--muted);
+}
+.instance-details {
+	flex: 1;
+	min-width: 0;
+}
+.instance-details p {
+	font-size: 10px;
+	line-height: 1.7;
+	color: var(--muted);
+	margin: 4px 0 0;
+	overflow-wrap: anywhere;
+}
+.instance-active {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-size: 10px;
+	color: var(--accent);
+	white-space: nowrap;
+}
+.instance-host-settings {
+	border-top: 1px solid var(--border);
+	padding: 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 14px;
+}
+.instance-subtext {
+	font-size: 11px;
+	color: var(--muted);
+	margin: 0;
+}
+.instance-host-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 90px auto;
+	align-items: end;
+	gap: 12px;
+}
+.instances-body input,
+.instances-body select {
+	font-size: var(--font-size-ui);
+	width: 100%;
+	min-width: 0;
+}
+.instance-host-form > .field-hint {
+	grid-column: 1 / -1;
+	margin: 0;
+}
+.instance-sharing-heading {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	justify-content: space-between;
+}
+.instance-sharing-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	color: var(--accent);
+	font-size: var(--font-size-ui);
+}
+.instance-instructions {
+	display: flex;
+	align-items: flex-start;
+	gap: 9px;
+	font-size: 11px;
+	color: var(--muted);
+	line-height: 1.8;
+}
+.instance-instructions > svg {
+	flex-shrink: 0;
+	margin-top: 3px;
+	color: var(--accent);
+}
+.instance-instructions p {
+	margin: 0;
+}
+.instance-instructions strong {
+	color: var(--text);
+	font-weight: 500;
+}
+.instance-instructions code {
+	background: var(--panel);
+	border-radius: 4px;
+	padding: 2px 4px;
+	font-size: 10px;
+	color: var(--text);
+}
+.instance-token {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.instance-token-control {
+	display: flex;
+	gap: 6px;
+	align-items: center;
+}
+.instance-token-control > input {
+	flex: 1;
+	font-family: ui-monospace, monospace;
+}
+.instance-host-settings > .field-hint {
+	margin: 0;
+}
+.instance-list {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.instance-actions {
+	display: flex;
+	gap: 4px;
+	align-items: center;
+}
+.instance-actions .icon-button {
+	width: 27px;
+	height: 30px;
+}
+.current-instance {
+	border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
+}
+.instance-empty {
+	padding: 30px 20px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	text-align: center;
+	gap: 10px;
+	border: 1px dashed var(--border);
+	border-radius: 12px;
+	color: var(--muted);
+}
+.instance-empty h3 {
+	color: var(--text);
+	font-size: 14px;
+	margin: 0;
+}
+.instance-empty p {
+	font-size: 12px;
+	line-height: 1.8;
+	margin: 0;
+	max-width: 400px;
+}
+.instance-empty.compact-empty {
+	padding: 22px;
+}
+.instance-loading {
+	display: flex;
+	gap: 8px;
+	justify-content: center;
+	padding: 25px;
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+}
+.instance-edit-form {
+	padding: 18px;
+	background: var(--sidebar);
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 17px;
+}
+.instance-ssh-fields {
+	display: grid;
+	grid-template-columns: 1fr 160px;
+	gap: 16px;
+}
+.instance-form-footer {
+	display: flex;
+	align-items: center;
+	gap: 20px;
+	justify-content: space-between;
+}
+.instance-form-footer p {
+	margin: 0;
+	max-width: 340px;
+}
+.instance-footer-note {
+	color: var(--muted);
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+	line-height: 1.8;
+	font-size: 10px;
+	margin: 0;
+}
+.instance-footer-note > svg {
+	flex-shrink: 0;
+	margin-top: 3px;
+}
+.remote-settings-note {
+	background: var(--sidebar);
+	border: 1px solid var(--border);
+	border-radius: 9px;
+	padding: 12px;
+	margin: 0;
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	color: var(--muted);
+	font-size: 11px;
+	line-height: 1.8;
+}
+.remote-settings-note > svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+}
+.settings-fields input[readonly] {
+	color: var(--muted);
+}
+@media (max-width: 620px) {
+	.instances-modal {
+		max-height: calc(100dvh - 24px);
+	}
+	.instances-body {
+		padding: 16px;
+		gap: 20px;
+	}
+	.instance-host-form {
+		grid-template-columns: minmax(0, 1fr) 90px;
+	}
+	.instance-host-form > button {
+		grid-column: 1 / -1;
+	}
+	.instance-ssh-fields {
+		grid-template-columns: 1fr;
+	}
+	.instance-form-footer {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 12px;
+	}
+	.instance-list .instance-row {
+		flex-wrap: wrap;
+	}
+	.instance-list .instance-actions {
+		width: 100%;
+		justify-content: flex-end;
+	}
+	.instance-list .instance-details {
+		min-width: 160px;
+	}
+}
+
+/* The embedded Settings view uses the same inset list surfaces as other pages. */
+.instances-embedded .instance-card {
+	border: 0;
+	border-radius: 0;
+	background: transparent;
+	overflow: visible;
+}
+.instances-embedded .instance-row {
+	padding: 10px 16px;
+}
+.instances-embedded .instance-host-settings {
+	padding: 0;
+	gap: 0;
+	border-top: 0;
+}
+.instances-embedded .instance-host-settings > .instance-subtext {
+	margin: 0 16px;
+	padding: 8px 0;
+	border-top: 1px solid var(--border);
+}
+.instances-embedded .instance-host-form {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	align-items: stretch;
+}
+.instances-embedded .instance-host-form > button {
+	align-self: flex-end;
+	margin: 10px 16px;
+}
+.instances-embedded .instance-host-form > .field-hint {
+	margin: 0 16px 10px;
+}
+.instances-embedded .instance-list {
+	gap: 0;
+}
+.instances-embedded .instance-list > .instance-row + .instance-row {
+	position: relative;
+}
+.instances-embedded .instance-list > .instance-row + .instance-row::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 16px;
+	right: 16px;
+	border-top: 1px solid var(--border);
+}
+.instances-embedded .instance-edit-form {
+	background: transparent;
+	border: 0;
+	border-top: 1px solid var(--border);
+	border-radius: 0;
+	padding: 0;
+	gap: 0;
+}
+.instances-embedded .instance-edit-form > .instance-section-heading {
+	padding: 10px 16px;
+}
+.instances-embedded .instance-ssh-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+.instances-embedded .instance-setting-row .field-hint {
+	display: block;
+	margin-top: 4px;
+}
+.instances-embedded .instance-form-footer {
+	padding: 10px 16px;
+	border-top: 1px solid var(--border);
+}
+.instances-embedded .instance-sharing-heading,
+.instances-embedded .instance-instructions,
+.instances-embedded .instance-token,
+.instances-embedded .instance-host-settings > .field-hint {
+	margin: 0;
+	padding: 10px 16px;
+	border-top: 1px solid var(--border);
+}
+.instances-embedded .instance-empty {
+	border: 0;
+}
+@media (max-width: 900px) {
+	.instances-embedded .instance-sharing-heading,
+	.instances-embedded .instance-token-control {
+		flex-wrap: wrap;
+	}
+	.instances-embedded .instance-token-control > input {
+		flex-basis: 100%;
+	}
+}
+
+.instances-embedded .instances-body {
+	gap: 24px;
+}
+.instances-embedded .instances-intro,
+.instances-embedded .field-hint,
+.instances-embedded .instance-instructions,
+.instances-embedded .instance-empty p,
+.instances-embedded .instance-footer-note {
+	line-height: 1.4;
+}
+.instances-embedded .instance-details p {
+	margin-top: 2px;
+	line-height: 1.4;
+}
+.instances-embedded .instance-icon {
+	width: 30px;
+	height: 30px;
+	border-radius: 8px;
+}
+.instances-embedded .instance-empty,
+.instances-embedded .instance-loading {
+	padding: 16px;
+}
+.instances-embedded .instance-form-footer {
+	gap: 12px;
+}
+.instances-embedded .instance-token {
+	gap: 4px;
+}
+
+.project-workflow-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-width: 0;
+	padding: 7px 12px 7px 24px;
+	border: 0;
+	border-radius: 8px;
+	background: transparent;
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+	text-align: left;
+}
+.project-workflow-row > svg { flex: 0 0 auto; }
+.project-workflow-row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-workflow-row:hover, .project-workflow-row.active { background: var(--hover); color: var(--text); }

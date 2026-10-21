@@ -1,0 +1,162 @@
+.settings-group {
+	min-width: 0;
+	container-type: inline-size;
+}
+.settings-group-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+.settings-group-heading > div:first-child {
+	min-width: 0;
+}
+.settings-group-heading h3 {
+	margin: 0;
+	font-size: 15px;
+	font-weight: 550;
+	line-height: 1.35;
+}
+.settings-group-description,
+.settings-group-footer,
+.settings-row-description {
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+.settings-group-description {
+	margin-top: 3px;
+}
+.settings-group-footer {
+	margin: 7px 3px 0;
+}
+.settings-group-actions {
+	display: flex;
+	align-items: center;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.settings-group-list {
+	min-width: 0;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--panel) 75%, var(--bg));
+}
+.settings-row {
+	position: relative;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+	padding: 10px 16px;
+	min-width: 0;
+}
+.settings-row + .settings-row::before,
+.settings-group-list > .settings-list-item + .settings-list-item::before {
+	content: '';
+	position: absolute;
+	top: 0;
+	left: 16px;
+	right: 16px;
+	border-top: 1px solid var(--border);
+}
+.settings-row-copy {
+	flex: 1;
+	min-width: 0;
+}
+.settings-row-label {
+	font-size: var(--font-size-ui);
+	font-weight: 500;
+	line-height: 1.35;
+	overflow-wrap: anywhere;
+}
+.settings-row-description {
+	margin-top: 2px;
+}
+.settings-row-control {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+	gap: 10px;
+	min-width: 0;
+	max-width: 100%;
+	flex-shrink: 0;
+}
+.settings-row-control > input:not([type='color']),
+.settings-row-control > .select-trigger {
+	width: 280px;
+	max-width: 100%;
+	min-width: 0;
+}
+.settings-row-stacked {
+	flex-direction: column;
+	align-items: stretch;
+	gap: 8px;
+}
+.settings-row-stacked > .settings-row-control {
+	display: flex;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 8px;
+	width: 100%;
+}
+.settings-row-stacked textarea {
+	width: 100%;
+}
+.settings-row-stacked > .settings-row-control > input:not([type='color']),
+.settings-row-stacked > .settings-row-control > .select-trigger {
+	width: 100%;
+}
+.settings-row-control > fieldset {
+	min-width: 0;
+	width: 100%;
+}
+.settings-group-list > fieldset {
+	border: 0;
+	margin: 0;
+	padding: 0;
+	min-width: 0;
+}
+.settings-row .field-hint,
+.settings-row .settings-help {
+	margin: 0;
+}
+.settings-row-control .switch-control {
+	flex-shrink: 0;
+}
+@container (max-width: 560px) {
+	.settings-row-inline:not(:has(> .settings-row-control > .switch-control)) {
+		align-items: stretch;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.settings-row-inline:not(:has(> .settings-row-control > .switch-control))
+		> .settings-row-control {
+		justify-content: flex-start;
+		flex-wrap: wrap;
+	}
+	.settings-row-control > input:not([type='color']),
+	.settings-row-control > .select-trigger {
+		width: 100%;
+	}
+	.settings-group-heading {
+		flex-wrap: wrap;
+		gap: 10px;
+	}
+	.settings-group-actions {
+		justify-content: flex-start;
+	}
+}
+@container (max-width: 320px) {
+	.settings-row {
+		padding: 10px 12px;
+		gap: 8px;
+	}
+	.settings-row + .settings-row::before {
+		left: 12px;
+		right: 12px;
+	}
+}

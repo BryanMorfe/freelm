@@ -1,0 +1,39 @@
+.chat-video-result {
+	width: min(100%, 520px);
+	min-width: 0;
+	margin: 12px 0;
+}
+.chat-video-placeholder {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	gap: 12px;
+	aspect-ratio: 16 / 9;
+	border-radius: 18px;
+	background: var(--panel);
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+}
+.chat-video-item video {
+	display: block;
+	width: 100%;
+	max-height: 600px;
+	border-radius: 18px;
+	background: #111;
+}
+.chat-video-download {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	padding: 8px 0;
+	font-size: var(--font-size-ui);
+	color: var(--muted);
+	text-decoration: none;
+}
+.chat-video-download:hover {
+	color: var(--text);
+}
+.chat-video-error {
+	color: var(--danger);
+}

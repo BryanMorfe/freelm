@@ -1,0 +1,29 @@
+.sidebar-running-thread {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	min-height: 32px;
+	padding: 7px 8px;
+	border-radius: 6px;
+	font-size: var(--font-size-ui);
+	text-align: left;
+}
+.sidebar-running-thread > svg,
+.sidebar-running-thread > small {
+	flex: 0 0 auto;
+}
+.sidebar-running-thread > span {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.sidebar-running-thread > small {
+	color: var(--muted);
+	font-size: 11px;
+}
+.sidebar-running-thread.active {
+	background: var(--hover);
+}

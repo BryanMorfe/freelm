@@ -1,0 +1,81 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="1254" height="1254" viewBox="0 0 1254 1254" fill="none" role="img" aria-labelledby="title description">
+  <title id="title">FreeLM app icon</title>
+  <desc id="description">FreeLM folded mint F on an opaque square graphite gradient. Editable paths and smooth vector shading, with no rounded mask, border, texture, or embedded bitmap.</desc>
+  <defs>
+    <linearGradient id="graphite-background" x1="0" y1="0" x2="0" y2="1254" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#303a44"/>
+      <stop offset="0.5" stop-color="#202832"/>
+      <stop offset="1" stop-color="#141b23"/>
+    </linearGradient>
+    <radialGradient id="graphite-edge-shade" cx="0" cy="0" r="1" gradientTransform="translate(627 627) scale(887)" gradientUnits="userSpaceOnUse">
+      <stop offset="0.35" stop-color="#000000" stop-opacity="0"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.08"/>
+    </radialGradient>
+    <linearGradient id="stem-color" x1="388" y1="462" x2="562" y2="1011" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#236f60"/>
+      <stop offset="0.28" stop-color="#62bea4"/>
+      <stop offset="0.55" stop-color="#469d87"/>
+      <stop offset="0.8" stop-color="#72cbb0"/>
+      <stop offset="1" stop-color="#73ceb1"/>
+    </linearGradient>
+    <radialGradient id="upper-fold-shadow" cx="0" cy="0" r="1" gradientTransform="translate(491 462) rotate(73) scale(186 233)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#073e35" stop-opacity="0.94"/>
+      <stop offset="0.52" stop-color="#0b4b3e" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#0b4b3e" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="lower-fold-shadow" cx="0" cy="0" r="1" gradientTransform="translate(544 736) rotate(108) scale(189 226)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#073d33" stop-opacity="0.86"/>
+      <stop offset="0.55" stop-color="#145e4f" stop-opacity="0.32"/>
+      <stop offset="1" stop-color="#145e4f" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="top-ribbon-color" x1="492" y1="283" x2="717" y2="514" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c4ffdd"/>
+      <stop offset="0.45" stop-color="#b7f7d9"/>
+      <stop offset="1" stop-color="#b3f8db"/>
+    </linearGradient>
+    <radialGradient id="top-ribbon-light" cx="0" cy="0" r="1" gradientTransform="translate(902 270) rotate(157) scale(600 358)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ddffe5" stop-opacity="0.54"/>
+      <stop offset="1" stop-color="#ddffe5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="middle-ribbon-color" x1="423" y1="696" x2="879" y2="566" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#a2f1d4"/>
+      <stop offset="0.47" stop-color="#76cbb5"/>
+      <stop offset="1" stop-color="#b2f3d9"/>
+    </linearGradient>
+    <radialGradient id="middle-ribbon-light" cx="0" cy="0" r="1" gradientTransform="translate(620 548) rotate(89) scale(220 304)" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#c7ffe4" stop-opacity="0.52"/>
+      <stop offset="1" stop-color="#c7ffe4" stop-opacity="0"/>
+    </radialGradient>
+    <path id="stem-shape" d="M567 454H477C410 454 366 480 366 535V981C366 1002 376 1011 397 1011C493 1011 567 950 567 861V454Z"/>
+    <path id="top-ribbon-shape" d="M588 263H947C959 263 965 269 965 282C965 382 893 463 791 463H551C448 463 369 514 366 605V503C366 444 381 406 423 362L472 310C503 279 541 263 588 263Z"/>
+    <path id="middle-ribbon-shape" d="M638 550H882C894 550 899 557 899 568C899 660 832 735 746 735H606C479 735 396 825 366 981V789C366 733 397 687 451 645L546 574C572 556 603 550 638 550Z"/>
+    <clipPath id="stem-clip"><use xlink:href="#stem-shape"/></clipPath>
+    <clipPath id="top-ribbon-clip"><use xlink:href="#top-ribbon-shape"/></clipPath>
+    <clipPath id="middle-ribbon-clip"><use xlink:href="#middle-ribbon-shape"/></clipPath>
+  </defs>
+  <g id="background">
+    <path d="M0 0H1254V1254H0Z" fill="url(#graphite-background)"/>
+    <path d="M0 0H1254V1254H0Z" fill="url(#graphite-edge-shade)"/>
+  </g>
+  <g id="stem">
+    <use xlink:href="#stem-shape" fill="url(#stem-color)"/>
+    <g clip-path="url(#stem-clip)">
+      <path d="M350 449H582V1016H350Z" fill="url(#upper-fold-shadow)"/>
+      <path d="M350 449H582V1016H350Z" fill="url(#lower-fold-shadow)"/>
+    </g>
+  </g>
+  <g id="top-ribbon">
+    <use xlink:href="#top-ribbon-shape" fill="url(#top-ribbon-color)"/>
+    <use xlink:href="#top-ribbon-shape" fill="url(#top-ribbon-light)"/>
+    <g clip-path="url(#top-ribbon-clip)">
+      <use xlink:href="#top-ribbon-shape" stroke="#ddffec" stroke-opacity="0.48" stroke-width="2"/>
+    </g>
+  </g>
+  <g id="middle-ribbon">
+    <use xlink:href="#middle-ribbon-shape" fill="url(#middle-ribbon-color)"/>
+    <use xlink:href="#middle-ribbon-shape" fill="url(#middle-ribbon-light)"/>
+    <g clip-path="url(#middle-ribbon-clip)">
+      <use xlink:href="#middle-ribbon-shape" stroke="#d6ffeb" stroke-opacity="0.36" stroke-width="2"/>
+    </g>
+  </g>
+</svg>

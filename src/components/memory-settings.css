@@ -1,0 +1,94 @@
+.memory-settings {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	min-width: 0;
+}
+.memory-editor-details,
+.memory-note-meta,
+.memory-note-actions,
+.memory-editor-actions {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 10px;
+}
+.memory-editor label {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+.memory-search input {
+	width: 100%;
+}
+.memory-editor {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+}
+.memory-editor > .settings-row {
+	padding: 0;
+	border: 0;
+}
+.settings-section-content .memory-editor textarea {
+	width: 100%;
+	field-sizing: content;
+	max-height: 600px;
+	overflow-y: auto;
+	resize: none;
+}
+.memory-editor-details > label {
+	flex: 1;
+	max-width: 280px;
+}
+.memory-editor-actions,
+.memory-note-actions {
+	justify-content: flex-end;
+}
+.memory-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+.memory-note {
+	padding: 12px 0;
+	border-bottom: 1px solid var(--border);
+	min-width: 0;
+}
+.memory-note:first-child {
+	padding-top: 0;
+}
+.memory-note:last-child {
+	padding-bottom: 0;
+	border-bottom: 0;
+}
+.memory-note-meta {
+	justify-content: flex-start;
+	flex-wrap: wrap;
+	color: var(--muted);
+	font-size: 11px;
+}
+.memory-note-content {
+	margin: 8px 0;
+	font-size: var(--font-size-ui);
+	line-height: 1.45;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.memory-delete {
+	color: var(--danger);
+}
+@media (max-width: 700px) {
+	.memory-editor-details,
+	.memory-editor-actions {
+		flex-wrap: wrap;
+	}
+	.memory-editor-details > label {
+		flex-basis: 100%;
+		max-width: none;
+	}
+	.memory-editor-actions > button {
+		white-space: normal;
+	}
+}

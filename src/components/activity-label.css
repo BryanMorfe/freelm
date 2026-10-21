@@ -1,0 +1,54 @@
+.activity-label-container {
+	display: block;
+	flex: 1;
+	min-width: 0;
+	max-width: 100%;
+}
+.activity-label,
+.activity-label-static {
+	display: block;
+	width: fit-content;
+	min-width: 0;
+	max-width: 100%;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: inherit;
+	font: inherit;
+	text-align: left;
+}
+.activity-label {
+	cursor: pointer;
+}
+.activity-label-text {
+	display: block;
+	width: fit-content;
+	min-width: 0;
+	max-width: 100%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.activity-label:hover:not(:has(.activity-shimmer)) {
+	color: var(--text);
+}
+.activity-details {
+	min-width: 0;
+	max-width: 100%;
+	margin-top: 8px;
+}
+.activity-details[hidden] {
+	display: none;
+}
+.activity-details .code-block {
+	margin: 0;
+}
+.activity-details .code-block pre {
+	max-height: 360px;
+	white-space: pre;
+	overflow: auto;
+	scrollbar-width: none;
+}
+.activity-details .code-block pre::-webkit-scrollbar {
+	display: none;
+}

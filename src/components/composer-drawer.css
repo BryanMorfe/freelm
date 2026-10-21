@@ -1,0 +1,29 @@
+.composer-drawer {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	max-height: min(360px, 45vh);
+	overflow: auto;
+	scrollbar-width: none;
+	margin: 0 12px;
+	padding: 0 8px;
+	border: 1px solid var(--border);
+	border-bottom: 0;
+	border-radius: 17px 17px 0 0;
+	background: var(--sidebar);
+	color: var(--muted);
+}
+.composer-drawer::-webkit-scrollbar {
+	display: none;
+}
+.composer-drawer > * {
+	flex-shrink: 0;
+	min-width: 0;
+}
+.composer-drawer > * + * {
+	border-top: 1px solid var(--border);
+}
+.composer-drawer:has(+ .composer[hidden]) {
+	border-bottom: 1px solid var(--border);
+	border-radius: 17px;
+}

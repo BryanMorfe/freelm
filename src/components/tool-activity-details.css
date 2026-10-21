@@ -1,0 +1,65 @@
+.tool-error-message {
+	margin: 0 0 8px;
+	color: var(--danger);
+	font-size: var(--font-size-ui);
+	line-height: 1.5;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.tool-request-details {
+	display: grid;
+	gap: 8px;
+	margin: 0;
+	font-size: 13px;
+}
+.tool-request-details > div {
+	display: grid;
+	grid-template-columns: minmax(50px, auto) minmax(0, 1fr);
+	gap: 12px;
+}
+.tool-request-details dt {
+	color: var(--muted);
+}
+.tool-request-details dd {
+	margin: 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.tool-source-details {
+	display: grid;
+	gap: 6px;
+	margin-top: 10px;
+	font-size: 12px;
+}
+.tool-source-details > div {
+	display: flex;
+	gap: 8px;
+	min-width: 0;
+}
+.tool-source-details span {
+	font-size: var(--font-size-ui);
+	flex-shrink: 0;
+	max-width: 55%;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.tool-source-details a {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+.tool-inspected-images {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin-top: 8px;
+}
+.tool-inspected-images img {
+	max-width: min(100%, 320px);
+	max-height: 320px;
+	object-fit: contain;
+	border-radius: 8px;
+}

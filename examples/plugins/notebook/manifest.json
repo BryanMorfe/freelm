@@ -1,0 +1,19 @@
+{
+  "manifestVersion": 2,
+  "id": "dev.freelm.notebook",
+  "name": "Notebook",
+  "version": "1.0.0",
+  "description": "A separate TypeScript plugin with a notebook tab and optional assistant tools. Notes stay on this computer, scoped to the selected account.",
+  "author": "FreeLM example",
+  "runtime": { "apiVersion": 1, "entry": "src/index.ts" },
+  "permissions": { "network": [], "storage": true },
+  "auth": { "type": "none" },
+  "contributes": {
+    "tools": [
+      { "name": "read_note", "description": "Read the current note from this plugin account.", "parameters": { "type": "object", "properties": {}, "additionalProperties": false }, "readOnly": true },
+      { "name": "save_note", "description": "Save the user's note to this plugin account.", "parameters": { "type": "object", "properties": { "text": { "type": "string", "maxLength": 10000 } }, "required": ["text"], "additionalProperties": false }, "readOnly": false }
+    ],
+    "tabs": [ { "id": "notebook", "title": "Notebook", "entry": "src/tab.ts", "icon": "notebook" } ],
+    "actions": ["read_note", "save_note"]
+  }
+}

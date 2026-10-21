@@ -1,0 +1,419 @@
+.tool-activity {
+	display: grid;
+	gap: 8px;
+	margin: 12px 0 18px;
+	max-width: 100%;
+	min-width: 0;
+}
+.tool-call {
+	--activity-color: var(--muted);
+	min-width: 0;
+	background: transparent;
+}
+.tool-call.tool-message {
+	border: 0;
+	border-radius: 0;
+	overflow: visible;
+	background: transparent;
+}
+.tool-message-status {
+	display: block;
+	font-size: var(--font-size-ui);
+	margin-bottom: 6px;
+}
+.tool-call summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+	padding: 4px 0;
+	font-size: 13px;
+	list-style: none;
+	color: var(--muted);
+}
+.tool-call summary::-webkit-details-marker {
+	display: none;
+}
+.tool-call summary span {
+	flex: 1;
+	text-transform: none;
+}
+.tool-call summary small {
+	font-size: 11px;
+	opacity: 0.7;
+}
+.tool-call details[open] .tool-chevron {
+	transform: rotate(90deg);
+}
+.tool-command {
+	display: flex;
+	gap: 8px;
+	margin: 0 12px 10px;
+	align-items: flex-start;
+}
+.tool-command code {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 12px;
+}
+.tool-arguments,
+.tool-output {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 320px;
+	overflow: auto;
+	padding: 12px;
+	margin: 0;
+	font:
+		12px/1.6 ui-monospace,
+		monospace;
+	color: var(--muted);
+}
+.tool-arguments {
+	opacity: 0.7;
+}
+.tool-plan {
+	list-style: none;
+	padding: 0;
+	margin: 0;
+	display: grid;
+	gap: 8px;
+	font-size: 13px;
+	overflow-wrap: anywhere;
+}
+.tool-plan-explanation {
+	margin: 0 0 10px;
+	font-size: 13px;
+	overflow-wrap: anywhere;
+}
+.tool-plan li[data-status='completed'] {
+	opacity: 0.55;
+}
+.tool-images {
+	display: flex;
+	gap: 8px;
+	flex-wrap: wrap;
+	padding: 10px 0;
+}
+.tool-images button {
+	border: 0;
+	padding: 0;
+	background: none;
+	cursor: zoom-in;
+	max-width: 320px;
+}
+.tool-images img {
+	max-width: 100%;
+	max-height: 460px;
+	border-radius: 8px;
+	display: block;
+}
+.tool-image-fullscreen {
+	position: fixed;
+	inset: 0;
+	background: #000a;
+	backdrop-filter: blur(24px);
+	z-index: 300;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+}
+.tool-image-fullscreen > img {
+	max-width: 94vw;
+	max-height: 92vh;
+	object-fit: contain;
+}
+.tool-image-fullscreen > button {
+	position: absolute;
+	right: 20px;
+	top: 20px;
+	background: #333;
+	color: white;
+}
+.tool-prompt[hidden] {
+	display: none;
+}
+.tool-prompt.tool-question-sheet {
+	color: var(--text);
+	border: 1px solid var(--border);
+	width: 100%;
+	min-width: 0;
+	max-height: none;
+	margin-bottom: 8px;
+	padding: 16px;
+	border-radius: 23px;
+	background: var(--panel);
+	box-shadow: none;
+	overflow: hidden;
+}
+.tool-question-form {
+	display: flex;
+	flex-direction: column;
+	max-height: min(440px, 50vh);
+	min-height: 0;
+}
+.tool-question-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	flex-shrink: 0;
+	margin-bottom: 16px;
+}
+.tool-question-header h2 {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	margin: 0;
+	font-size: 14px;
+	font-weight: 400;
+	color: var(--muted);
+}
+.tool-question-page {
+	margin-left: auto;
+	font-size: 11px;
+	color: var(--muted);
+	white-space: nowrap;
+}
+.tool-question-minimize {
+	margin-left: auto;
+	width: 26px;
+	height: 26px;
+	border-radius: 50%;
+}
+.tool-question-page + .tool-question-minimize {
+	margin-left: 0;
+}
+.tool-question-body {
+	min-height: 0;
+	min-width: 0;
+	overflow: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+}
+.tool-question-body fieldset {
+	border: 0;
+	padding: 0;
+	min-width: 0;
+	margin: 0;
+}
+.tool-question-body legend {
+	font-size: 15px;
+	line-height: 1.5;
+	width: 100%;
+	padding: 0;
+	margin-bottom: 12px;
+	font-weight: 500;
+	overflow-wrap: anywhere;
+}
+.tool-question-body .question-options {
+	display: grid;
+	gap: 2px;
+	margin-bottom: 0;
+}
+.tool-question-body .tool-question-option {
+	text-align: left;
+	background: transparent;
+	color: inherit;
+	display: flex;
+	align-items: flex-start;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 4px;
+	border: 0;
+	border-radius: 8px;
+	font-size: 14px;
+	line-height: 1.5;
+}
+.tool-question-body .tool-question-option:hover,
+.tool-question-body .tool-question-option.selected {
+	background: var(--hover);
+}
+.tool-question-option-number {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 21px;
+	height: 21px;
+	flex-shrink: 0;
+	border: 1px solid color-mix(in srgb, var(--muted) 35%, transparent);
+	border-radius: 5px;
+	background: var(--hover);
+	color: var(--muted);
+	font-size: 12px;
+}
+.selected .tool-question-option-number {
+	color: var(--text);
+	border-color: var(--muted);
+}
+.tool-question-option-content {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.tool-question-option-content small {
+	display: block;
+	margin-top: 2px;
+	font-size: 12px;
+	color: var(--muted);
+	opacity: 1;
+}
+.tool-question-custom {
+	display: flex;
+	flex-direction: row;
+	align-items: flex-start;
+	gap: 10px;
+	margin: 16px 4px 0;
+	color: var(--muted);
+}
+.tool-question-custom > svg {
+	flex-shrink: 0;
+	margin-top: 3px;
+}
+.tool-question-custom textarea {
+	width: 100%;
+	background: transparent;
+	font: inherit;
+	field-sizing: content;
+	min-height: 24px;
+	max-height: 600px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	resize: none;
+	color: var(--text);
+	font-size: 14px;
+	line-height: 1.6;
+}
+.tool-question-custom textarea::placeholder {
+	color: var(--muted);
+}
+.tool-question-form .tool-question-footer {
+	display: flex;
+	justify-content: space-between;
+	flex-wrap: wrap;
+	flex-shrink: 0;
+	gap: 8px;
+	margin-top: 14px;
+}
+.tool-question-pagination,
+.tool-question-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.tool-question-actions {
+	margin-left: auto;
+}
+.tool-question-footer .primary-button,
+.tool-question-footer .secondary-button,
+.tool-question-page-button {
+	padding: 7px 12px;
+	border-radius: 999px;
+	font-size: var(--font-size-ui);
+	font-weight: 400;
+	line-height: 1.4;
+}
+.tool-question-footer .primary-button {
+	background: var(--text);
+	color: var(--bg);
+	border-color: transparent;
+}
+.tool-question-footer .primary-button:hover:not(:disabled) {
+	background: color-mix(in srgb, var(--text) 85%, var(--panel));
+}
+.tool-question-footer .primary-button:disabled {
+	background: color-mix(in srgb, var(--muted) 80%, var(--panel));
+	color: var(--panel);
+	opacity: 1;
+}
+.tool-question-page-button {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	padding-inline: 4px;
+	color: var(--muted);
+}
+.tool-question-page-button:hover {
+	color: var(--text);
+	background: var(--hover);
+}
+.tool-question-minimized {
+	margin-bottom: 8px;
+}
+.tool-question-minimized[hidden] {
+	display: none;
+}
+.tool-question-reopen {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	border: 1px solid var(--border);
+	border-radius: 999px;
+	background: var(--panel);
+	color: var(--muted);
+	font-size: 13px;
+}
+.tool-question-reopen:hover {
+	color: var(--text);
+}
+.tool-call .spin {
+	animation: tool-spin 1s linear infinite;
+}
+@keyframes tool-spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+.composer-tool-status {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	font-size: var(--font-size-ui);
+	padding: 6px 9px;
+	color: var(--muted);
+	border-radius: 8px;
+}
+.composer-tool-status:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+
+.tool-call[data-activity-state='active'] {
+	--activity-color: var(--tertiary);
+}
+.tool-call[data-activity-state='failed'] {
+	--activity-color: var(--danger);
+}
+.tool-call[data-activity-state='failed'] .activity-label:hover,
+.tool-call[data-activity-state='failed'] .edited-files-activity > summary:hover,
+.tool-call[data-activity-state='failed'] .approval-denied-activity > summary:hover {
+	color: var(--danger);
+}
+.tool-status-line {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+	color: var(--activity-color, var(--muted));
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.tool-status-line small {
+	font-size: 11px;
+	flex-shrink: 0;
+}
+.tool-status-line > span {
+	min-width: 0;
+}
+.tool-debug-details {
+	margin-top: 6px;
+	color: var(--muted);
+}
+.tool-debug-details summary {
+	width: fit-content;
+	font-size: var(--font-size-ui);
+}
+.tool-debug-label {
+	margin-top: 8px;
+	font-size: var(--font-size-ui);
+}

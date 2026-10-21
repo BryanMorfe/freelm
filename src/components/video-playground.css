@@ -1,0 +1,45 @@
+.video-composer textarea {
+	resize: none;
+	overflow-y: auto;
+}
+.video-gallery-preview {
+	position: relative;
+}
+.video-gallery-video {
+	display: block;
+	width: 100%;
+	height: auto;
+	background: #111;
+}
+.video-gallery-placeholder {
+	aspect-ratio: 16 / 9;
+}
+.video-gallery-play {
+	position: absolute;
+	left: 50%;
+	top: 50%;
+	transform: translate(-50%, -50%);
+	display: grid;
+	place-items: center;
+	width: 48px;
+	height: 48px;
+	padding-left: 3px;
+	border-radius: 50%;
+	background: #10101070;
+	border: 1px solid #ffffff55;
+	color: #fff;
+	pointer-events: none;
+}
+.video-job-progress {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 10px;
+	font-variant-numeric: tabular-nums;
+}
+.video-job-progress progress {
+	flex: 1;
+	min-width: 0;
+	height: 5px;
+	accent-color: var(--text);
+}

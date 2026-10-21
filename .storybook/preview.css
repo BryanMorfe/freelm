@@ -1,0 +1,26 @@
+/* Canvas scaffolding only. Component visuals come from src/styles.css and their own CSS. */
+body.app-shell.freelm-story-document {
+	display: block;
+	height: auto;
+	min-height: 100vh;
+	overflow: visible;
+	background: var(--bg);
+	color: var(--text);
+}
+.freelm-story {
+	min-width: 0;
+}
+.freelm-story-guide {
+	max-width: 880px;
+	margin: 24px auto;
+}
+.freelm-story-guide h1 {
+	font-size: 28px;
+}
+.freelm-story-guide > p {
+	line-height: 1.6;
+	color: var(--muted);
+}
+.freelm-story-guide code {
+	overflow-wrap: anywhere;
+}

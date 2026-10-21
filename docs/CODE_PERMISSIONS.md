@@ -1,0 +1,53 @@
+# Code task permissions
+
+Code is FreeLM’s workspace for working on an execution host. New profiles enable Code tools and command execution by default. **Settings → Personal → Tools** retains both switches; existing saved disabled settings are preserved. Chat remains separate and does not gain host-machine commands or file access from a Code permission choice.
+
+The Code composer shows the current project, execution host, and permission mode. Project folders describe the task’s focus and provide its initial working directory. They are not an absolute filesystem access boundary. Absolute file paths and command working directories may refer elsewhere on the host when the action is approved. Tasks outside a project use the optional default working directory in Tools settings, or the host account’s home directory when it is blank.
+
+An unsent task can choose or clear its project without losing its draft. Once a Code task contains messages, its project context is fixed: the composer shows a static label, and sidebar moving and dragging are disabled. Starting a new task creates a new opportunity to select its context.
+
+## Modes
+
+| Mode                 | Before an action requiring approval                                                                                                                                                                        |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Ask for approval** | FreeLM asks the user to approve the proposed action. A granted approval is scoped to the action or explicitly offered session permission.                                                                  |
+| **Approve for me**   | A separate model request evaluates the task’s conversation and exact proposed action. Only an explicit valid approval permits execution. A denial or review failure returns a reason to the working agent. |
+| **Full access**      | Actions run without approval prompts. The host account and enabled-tool settings still determine what is available.                                                                                        |
+
+Tools settings choose the starting mode for new Code tasks. A task’s selected mode is kept with its conversation and can be changed in the composer. Old `trusted` tool settings mean Full access; they are not a fourth mode. Turning off Code tools or commands remains an independent host preference.
+
+Pending action approvals appear inline above the Code composer. They do not block navigation or take keyboard focus. Each request belongs to its execution run and task; switching tasks hides it until that task is selected again. Allow once, the offered task grant, Decline, and stopping the task retain their existing execution semantics. Structured assistant questions remain separate from action approvals.
+
+**Approval is an execution gate, not an operating-system sandbox.** Once a Code process starts, it has the host account’s file and network access. The review cannot confine the process to the project directory or guarantee that a command has no unexpected side effects. This is separate from Chat’s isolated Python interpreter.
+
+## Separate review
+
+Approve for me uses the same selected API connection, text model, and thinking mode as the Code task. It sends an additional request containing bounded conversation evidence and the pending action. The reviewer has no tools and does not execute commands. It evaluates the proposed action’s risk and whether trusted user instructions authorize its targets and effects.
+
+Every action starts a fresh review request; reviewer responses do not accumulate in a separate conversation. Review admission uses the selected model’s configured context window, or the 128,000-token compatibility fallback when unset. FreeLM estimates UTF-8 text bytes divided by four, includes the policy and message framing, and uses 90% of the window minus an output reservation of up to 8,192 tokens. This estimate is a budgeting heuristic, not the provider’s tokenizer or a claim about an unconfigured model’s capacity.
+
+All genuine human requests, selected-text references and attachment names are retained. The exact proposed action, including complete command arguments or patch body, is never shortened. These required fields are admitted first. Historical assistant messages and completed tool calls provide optional evidence: up to 64 recent messages and 64 recent calls are projected with explicitly marked excerpts, then selected within a separate history budget. Assistant context preceding human replies is prioritized before old command output. Original task history remains unchanged; this projection belongs only to the review request. Host omission notices warn the reviewer against inferring missing script behavior or what a brief human reply refers to when its original context is unavailable.
+
+A provider context-window error can trigger at most three distinct review payloads, progressively reducing optional historical evidence. Genuine human requests and the proposed action stay identical across retries. A valid policy denial is never retried. If even the complete required evidence cannot fit the configured or provider window, the action remains blocked with a specific review-capacity explanation; the user can inspect it using Ask for approval. There is no fixed conversation character limit that permanently disables automatic review after a long task.
+
+The main agent’s explanation, selected-text references, documents, command output, MCP results, and skill text provide context. They cannot grant new user permission merely by claiming approval. The reviewer must distinguish actual user messages from quoted or generated material. Commands, working directories, patch bodies, tool arguments, file targets, and network destinations are assessed as concrete action data.
+
+Routine, bounded work necessary for the user’s request can be approved without repeated questions. A path outside the project does not by itself make an action unsafe. Destructive scope, sensitive-data transfer, credential access, and changes that weaken security require authorization covering their actual effects. Missing script contents or omitted context must not be guessed to be benign.
+
+Invalid model output, network errors, timeouts, cancellation, or incomplete review prevent execution. Review failure means FreeLM could not reach a valid decision; it does not establish that the action itself was unsafe. There is no automatic fallback from failed review to Full access. Approval applies to the exact pending action, rather than authorizing arbitrary later commands.
+
+Transient transport failures, HTTP 408/429/5xx responses, and invalid or incomplete decisions receive at most two additional reviews with short, cancellable backoff. The action and evidence remain unchanged for these retries. This retry allowance is shared across context-budget reductions, for at most five provider requests in total. Authentication and other non-transient request errors require configuration changes. A valid denial ends review immediately, even after an earlier failed attempt.
+
+An exhausted or unavailable review appears as **Approval review failed**, separately from **Approval denied**. Expanding either message shows the requested action and explanation; opening it does not run the action. Failed review does not grant permission to reformulate and resubmit an equivalent action automatically. The user can retry after addressing the failure or choose Ask for approval. Nested orchestration preserves these outcomes even if its JavaScript finishes normally. Permission/model changes are rechecked before dispatch so an earlier decision cannot authorize execution under a newly selected policy.
+
+For remote tasks, the selected host executes the tools and controls remote-tool enablement. Folder paths and the home-directory fallback belong to that host. Review uses the task’s selected API connection; no remote execution silently falls back to the client machine.
+
+## Implementation reference and validation
+
+This design follows the separation of review and execution described in [OpenAI’s guardrails and human-review guide](https://developers.openai.com/api/docs/guides/agents/guardrails-approvals). An API-backed client implements its own enforcement; it does not inherit Codex’s permission system automatically.
+
+The inspected Codex OSS source is version **0.158.0**. Relevant paths in that source are `codex-rs/prompts/templates/guardian/policy.md`, `classifier_instructions.md`, `codex-rs/guardian-context/src/authorization.rs`, and `codex-rs/ext/guardian-reviewer/src/review.rs` / `completion.rs`. Practical principles retained here are genuine role-labeled authorization evidence, exact-action binding, separate risk and authorization judgments, stale-approval rejection, and failure that prevents execution. FreeLM does not reproduce Codex’s OS sandbox or its full Guardian runtime.
+
+The context-budget comparison also inspected official Codex commit **dde5f8c5ae9b644c6882b3a48581ac317255d597**. Its [Guardian budget accounting](https://github.com/openai/codex/blob/dde5f8c5ae9b644c6882b3a48581ac317255d597/codex-rs/guardian-context/src/budget.rs) uses the model’s effective context window and accounts for the complete request. [Planned action framing](https://github.com/openai/codex/blob/dde5f8c5ae9b644c6882b3a48581ac317255d597/codex-rs/guardian-context/src/action.rs) retains complete nested action arguments. [Text truncation](https://github.com/openai/codex/blob/dde5f8c5ae9b644c6882b3a48581ac317255d597/codex-rs/guardian-context/src/truncation.rs) preserves UTF-8-safe prefixes and suffixes with an omission marker, while [authorization notices](https://github.com/openai/codex/blob/dde5f8c5ae9b644c6882b3a48581ac317255d597/codex-rs/guardian-context/src/authorization.rs) distinguish missing user instructions and missing assistant context. FreeLM adopts these budgeting and evidence principles with fresh tool-free requests; it does not port Codex’s reusable reviewer sessions, retained-context machinery, or reviewer tools.
+
+Validate mode persistence, legacy `trusted` interpretation, explicitly disabled tools, blank-directory home fallback, approval and denial, cancellation, malformed review output, and commands/files outside project folders in isolated profiles. A mock provider proves the client contract; real-provider behavior and Linux execution remain separate qualification steps.

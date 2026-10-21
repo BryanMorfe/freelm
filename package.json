@@ -1,0 +1,175 @@
+{
+	"name": "freelm",
+	"version": "0.1.0",
+	"private": true,
+	"description": "A local-first desktop workspace for any OpenAI-compatible API",
+	"type": "module",
+	"main": "dist-electron/main.cjs",
+	"scripts": {
+		"dev": "vite --host 127.0.0.1",
+		"dev:desktop": "node scripts/dev-desktop.mjs",
+		"storybook": "storybook dev --host 127.0.0.1 --port 6006 --no-open --disable-telemetry",
+		"typecheck:storybook": "tsc --noEmit -p tsconfig.storybook.json",
+		"build-storybook": "npm run typecheck:storybook && storybook build --disable-telemetry",
+		"build": "node scripts/check-ui-components.mjs && tsc --noEmit && vite build && node scripts/build-electron.mjs",
+		"start": "electron .",
+		"icons:prepare": "node scripts/prepare-app-icons.mjs",
+		"test": "vitest run",
+		"test:e2e": "playwright test",
+		"package:mac": "node scripts/prepare-mac-dependencies.mjs && node scripts/prepare-search-runtime.mjs --targets=darwin-arm64,darwin-x64 && npm run build && electron-builder --mac --dir --universal",
+		"package:linux": "node scripts/prepare-search-runtime.mjs && npm run build && electron-builder --linux AppImage deb",
+		"format": "prettier --write .",
+		"test:desktop": "node scripts/smoke-desktop.mjs",
+		"test:bots": "node scripts/smoke-bots.mjs",
+		"test:bot-activity": "node scripts/smoke-bot-activity.mjs",
+		"test:bot-tasks": "node scripts/smoke-bot-tasks.mjs",
+		"test:plugins": "node scripts/smoke-plugins.mjs",
+		"test:instances": "node scripts/smoke-instances.mjs",
+		"test:tools": "node scripts/smoke-tools.mjs",
+		"test:chat-images": "node scripts/smoke-chat-images.mjs",
+		"test:composer": "node scripts/smoke-composer.mjs",
+		"test:computer-use": "node scripts/smoke-computer-use.mjs",
+		"test:workspace-transfer": "node scripts/smoke-workspace-transfer.mjs",
+		"test:moderation": "node scripts/smoke-moderation.mjs",
+		"test:web": "node scripts/smoke-web.mjs",
+		"test:web:live": "node scripts/smoke-web-live.mjs",
+		"test:search": "node scripts/smoke-search.mjs",
+		"test:context-menu": "node scripts/smoke-context-menu.mjs",
+		"test:chat-python": "node scripts/smoke-chat-python.mjs",
+		"test:plugin-runtime": "node scripts/smoke-plugin-runtime.mjs",
+		"test:plugin-surfaces": "node scripts/smoke-plugin-surfaces.mjs",
+		"test:workflows": "node scripts/smoke-workflows.mjs",
+		"plugin:pack": "node scripts/package-plugin.mjs"
+	},
+	"dependencies": {
+		"@codemirror/commands": "^6.11.1",
+		"@codemirror/lang-javascript": "^6.2.5",
+		"@codemirror/lang-markdown": "^6.5.2",
+		"@codemirror/lang-python": "^6.2.1",
+		"@codemirror/language": "^6.12.4",
+		"@codemirror/state": "^6.7.6",
+		"@codemirror/view": "^6.43.13",
+		"@lezer/common": "^1.5.3",
+		"@lezer/highlight": "^1.2.5",
+		"@modelcontextprotocol/sdk": "^1.31.0",
+		"@napi-rs/canvas": "^1.0.9",
+		"ajv": "^8.20.0",
+		"ajv-formats": "^3.0.1",
+		"esbuild-wasm": "^0.25.12",
+		"fflate": "^0.8.2",
+		"highlight.js": "^11.12.0",
+		"htmlparser2": "^12.0.0",
+		"katex": "^0.19.0",
+		"lucide-react": "^0.468.0",
+		"pdfjs-dist": "^6.3.289",
+		"quickjs-emscripten": "0.31.0",
+		"react": "^19.1.1",
+		"react-dom": "^19.1.1",
+		"react-markdown": "^10.1.0",
+		"rehype-katex": "^7.0.1",
+		"remark-gfm": "^4.0.1",
+		"remark-math": "^6.0.0",
+		"undici": "^6.29.0",
+		"yaml": "^2.9.1"
+	},
+	"devDependencies": {
+		"@playwright/test": "^1.55.0",
+		"@storybook/addon-docs": "10.6.1",
+		"@storybook/react-vite": "10.6.1",
+		"@types/node": "^22.18.0",
+		"@types/react": "^19.1.13",
+		"@types/react-dom": "^19.1.9",
+		"@vitejs/plugin-react": "^4.7.0",
+		"electron": "^44.4.5",
+		"electron-builder": "^26.0.12",
+		"esbuild": "^0.25.9",
+		"prettier": "^3.9.9",
+		"storybook": "10.6.1",
+		"typescript": "^5.9.2",
+		"vite": "^6.3.6",
+		"vitest": "^3.2.4"
+	},
+	"build": {
+		"appId": "app.freelm.desktop",
+		"productName": "FreeLM",
+		"afterPack": "./scripts/package-search-resources.mjs",
+		"directories": {
+			"output": "release"
+		},
+		"files": [
+			"dist/**/*",
+			"dist-electron/**/*",
+			"resources/branding/icon.png",
+			"package.json",
+			"THIRD_PARTY_NOTICES.md"
+		],
+		"asarUnpack": [
+			"dist-electron/web-pdf-worker.mjs",
+			"dist-electron/code-orchestration-worker.cjs",
+			"node_modules/quickjs-emscripten/**",
+			"node_modules/quickjs-emscripten-core/**",
+			"node_modules/@jitl/**",
+			"node_modules/pdfjs-dist/**",
+			"node_modules/@napi-rs/**",
+			"dist-electron/plugin-runtime-worker.cjs",
+			"dist-electron/plugin-surface-runtime-worker.cjs",
+			"dist-electron/plugin-compiler-worker.cjs",
+			"node_modules/esbuild-wasm/**"
+		],
+		"mac": {
+			"icon": "resources/branding/icon.icns",
+			"category": "public.app-category.productivity",
+			"signIgnore": [
+				"/Contents/Resources/search/(source|licenses)/",
+				"/Contents/Resources/search/runtime/[^/]+/site-packages/babel/locale-data/[^/]+\\.dat$",
+				"/Contents/Resources/search/runtime/[^/]+/site-packages/(pytz|tzdata)/zoneinfo/"
+			],
+			"x64ArchFiles": "Contents/Resources/app.asar.unpacked/node_modules/@napi-rs/canvas-darwin-{arm64,x64}/skia.darwin-{arm64,x64}.node",
+			"target": [
+				"dmg"
+			],
+			"extendInfo": {
+				"NSMicrophoneUsageDescription": "FreeLM records audio when you start recording so you can transcribe it with your selected API.",
+				"NSLocalNetworkUsageDescription": "FreeLM connects to the API servers and FreeLM instances you choose on your local network to discover models and run your requests.",
+				"NSScreenCaptureUsageDescription": "FreeLM captures only an application you authorize so your Code agent can see and interact with it."
+			},
+			"type": "development",
+			"forceCodeSigning": true,
+			"notarize": false,
+			"extraResources": [
+				{
+					"from": "resources/computer/freelm-computer",
+					"to": "computer/freelm-computer"
+				}
+			]
+		},
+		"linux": {
+			"icon": "resources/branding/png",
+			"category": "Utility",
+			"extraResources": [
+				{
+					"from": "resources/search",
+					"to": "search",
+					"filter": [
+						"launcher.py",
+						"manifest.json",
+						"engines.json",
+						"requirements.lock",
+						"NOTICE.md",
+						"licenses/**/*",
+						"source/**/*",
+						"runtime/linux-${arch}/**/*"
+					]
+				}
+			],
+			"target": [
+				"AppImage",
+				"deb"
+			],
+			"maintainer": "FreeLM"
+		},
+		"win": {
+			"icon": "resources/branding/icon.ico"
+		}
+	}
+}

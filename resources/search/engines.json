@@ -1,0 +1,77 @@
+{
+	"version": "2026.9.23+3cd69d30e",
+	"engines": [
+		{
+			"name": "bing",
+			"categories": ["general", "web"],
+			"paging": false,
+			"time_range_support": false,
+			"safesearch": true,
+			"enabled": true
+		},
+		{
+			"name": "bing images",
+			"categories": ["images", "web"],
+			"paging": true,
+			"time_range_support": true,
+			"safesearch": true,
+			"enabled": true
+		},
+		{
+			"name": "duckduckgo",
+			"categories": ["general", "web"],
+			"paging": true,
+			"time_range_support": true,
+			"safesearch": true,
+			"enabled": false
+		},
+		{
+			"name": "duckduckgo images",
+			"categories": ["images"],
+			"paging": true,
+			"time_range_support": false,
+			"safesearch": true,
+			"enabled": false
+		},
+		{
+			"name": "google",
+			"categories": ["general", "web"],
+			"paging": true,
+			"time_range_support": true,
+			"safesearch": true,
+			"enabled": false
+		},
+		{
+			"name": "google images",
+			"categories": ["images", "web"],
+			"paging": true,
+			"time_range_support": true,
+			"safesearch": true,
+			"enabled": true
+		},
+		{
+			"name": "yahoo",
+			"categories": ["general", "web"],
+			"paging": true,
+			"time_range_support": true,
+			"safesearch": true,
+			"enabled": false
+		},
+		{
+			"name": "brave",
+			"categories": ["general", "web"],
+			"paging": true,
+			"time_range_support": true,
+			"safesearch": true,
+			"enabled": true
+		},
+		{
+			"name": "brave.images",
+			"categories": ["images", "web"],
+			"paging": false,
+			"time_range_support": false,
+			"safesearch": true,
+			"enabled": false
+		}
+	]
+}

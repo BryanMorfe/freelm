@@ -1,0 +1,234 @@
+.tool-settings,
+.tool-settings-fields-list {
+	display: flex;
+	flex-direction: column;
+	gap: 22px;
+	min-width: 0;
+}
+/* Keep contained groups in a normal element rather than the native fieldset content box. */
+.tool-settings-fields {
+	display: block;
+	border: 0;
+	margin: 0;
+	padding: 0;
+}
+.tool-settings-fields:disabled {
+	opacity: 0.7;
+}
+.tool-settings-toggle {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	justify-content: space-between;
+	gap: 22px;
+}
+.tool-settings-toggle > span {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+.tool-settings-toggle strong {
+	font-size: var(--font-size-ui);
+	font-weight: 500;
+}
+.tool-settings-toggle small {
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.6;
+}
+.tool-settings-path {
+	display: flex;
+	gap: 10px;
+	align-items: center;
+	min-width: 0;
+}
+.tool-settings-path input {
+	flex: 1;
+	min-width: 0;
+}
+.tool-settings-pair {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 16px;
+}
+.tool-settings-pair label {
+	min-width: 0;
+}
+.tool-settings-model {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	font-size: var(--font-size-ui);
+}
+.tool-settings-model .composer-model-trigger {
+	align-self: flex-start;
+	padding: 10px 12px;
+	border: 1px solid var(--border);
+	border-radius: 8px;
+	max-width: 100%;
+}
+.tool-settings-card {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+	border: 1px solid var(--border);
+	border-radius: 12px;
+	padding: 20px;
+}
+.tool-settings-card-heading {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 20px;
+}
+.tool-settings-card-heading .tool-settings-toggle {
+	gap: 12px;
+	flex-direction: row-reverse;
+}
+.tool-settings-remove {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	color: var(--danger);
+	font-size: var(--font-size-ui);
+	padding: 5px 8px;
+	min-height: 30px;
+	line-height: 18px;
+	flex-shrink: 0;
+}
+.tool-settings-card textarea {
+	min-height: 90px;
+}
+.tool-settings-empty {
+	padding: 22px;
+	border: 1px dashed var(--border);
+	border-radius: 10px;
+	color: var(--muted);
+	font-size: 13px;
+	text-align: center;
+	margin: 0;
+}
+.tool-settings-notice {
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 8px 12px;
+}
+.tool-settings-discover {
+	align-self: flex-start;
+}
+.tool-settings-results {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+	min-width: 0;
+}
+.tool-settings-results ul {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	list-style: none;
+	padding: 0;
+	margin: 0;
+}
+.tool-settings-results li {
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	padding: 10px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	min-width: 0;
+}
+.tool-settings-results strong {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	font-size: var(--font-size-ui);
+	font-weight: 500;
+	overflow-wrap: anywhere;
+	min-width: 0;
+}
+.tool-settings-results p {
+	font-size: 12px;
+	line-height: 1.4;
+	margin: 0;
+	color: var(--muted);
+	overflow-wrap: anywhere;
+	white-space: pre-wrap;
+}
+.tool-settings-results code {
+	font-size: 11px;
+	overflow-wrap: anywhere;
+	color: var(--muted);
+}
+.tool-settings-results summary {
+	cursor: pointer;
+	font-size: var(--font-size-ui);
+	color: var(--muted);
+}
+.tool-settings-results pre {
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	max-height: 300px;
+	overflow: auto;
+	padding: 12px;
+	background: var(--panel);
+	border-radius: 7px;
+	font-size: 11px;
+}
+.tool-settings-results .tool-settings-warning {
+	color: var(--danger);
+}
+@media (max-width: 700px) {
+	.tool-settings-pair {
+		grid-template-columns: 1fr;
+	}
+	.tool-settings-card {
+		padding: 14px;
+	}
+	.tool-settings-path {
+		flex-wrap: wrap;
+	}
+	.tool-settings-path input {
+		flex-basis: 100%;
+	}
+}
+
+/* Inset rows own the surface; path and model controls only supply their layout. */
+.tool-settings-model.settings-row {
+	flex-direction: row;
+	gap: 20px;
+}
+.tool-settings-model.settings-row .composer-model-trigger {
+	height: 30px;
+	min-height: 30px;
+	padding: 4px 10px;
+	font-size: var(--font-size-ui);
+	line-height: 20px;
+}
+.tool-settings-server {
+	min-width: 0;
+}
+.tool-settings-results .settings-row-label {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+.tool-settings-results .settings-row-control > code {
+	display: block;
+	margin-bottom: 0;
+}
+.tool-settings .settings-row-control > details > summary {
+	cursor: pointer;
+	font-size: var(--font-size-ui);
+}
+.tool-settings .settings-row-control > details > p {
+	margin: 6px 0;
+}
+@media (max-width: 900px) {
+	.tool-settings-model.settings-row {
+		flex-direction: column;
+		align-items: stretch;
+		gap: 8px;
+	}
+}

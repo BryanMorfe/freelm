@@ -1,0 +1,59 @@
+.code-goal-controls {
+	padding: 6px 4px;
+	color: var(--muted);
+	font-size: var(--font-size-ui);
+	min-width: 0;
+}
+.code-goal-line {
+	display: flex;
+	gap: 8px;
+	align-items: center;
+	flex-wrap: wrap;
+}
+.code-goal-objective {
+	color: var(--text);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	min-width: 0;
+	flex: 1;
+}
+.code-goal-status {
+	font-size: 12px;
+}
+.code-goal-controls button {
+	font-size: var(--font-size-ui);
+	border: 0;
+	background: transparent;
+	color: inherit;
+	min-height: 30px;
+	padding: 4px 7px;
+	border-radius: 8px;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+.code-goal-controls button:hover {
+	background: var(--hover);
+	color: var(--text);
+}
+.code-goal-editor {
+	display: grid;
+	gap: 8px;
+	margin-top: 8px;
+}
+.code-goal-editor input {
+	min-width: 0;
+	width: 100%;
+	min-height: 30px;
+	font-size: var(--font-size-ui);
+}
+.code-goal-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.code-goal-editor p {
+	color: var(--error);
+	margin: 0;
+}

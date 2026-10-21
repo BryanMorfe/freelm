@@ -1,0 +1,100 @@
+.chat-image-result {
+	margin: 12px 0 18px;
+	max-width: 100%;
+}
+.chat-image-placeholder {
+	position: relative;
+	width: min(400px, 100%);
+	max-height: 640px;
+	border-radius: 14px;
+	overflow: hidden;
+	background: color-mix(in srgb, var(--panel) 35%, transparent);
+	color: var(--muted);
+	display: flex;
+	align-items: flex-end;
+	padding: 18px;
+}
+.chat-image-placeholder > span {
+	z-index: 1;
+	font-size: 13px;
+}
+.chat-image-dots {
+	position: absolute;
+	inset: 10%;
+	background: radial-gradient(
+			circle,
+			color-mix(in srgb, var(--text) 25%, transparent) 1px,
+			transparent 1.5px
+		)
+		0 0 / 8px 8px;
+	mask-image: radial-gradient(ellipse, #000 10%, transparent 70%);
+}
+.chat-image-dots::after {
+	content: '';
+	position: absolute;
+	inset: 0;
+	background: radial-gradient(circle, #729cf5 1px, transparent 1.5px) 0 0 / 8px 8px;
+	mask-image: radial-gradient(ellipse at 35% 45%, #000 0%, transparent 55%);
+	opacity: 0.6;
+}
+.is-creating .chat-image-dots::after {
+	animation: chat-image-glow 5s ease-in-out infinite alternate;
+}
+@keyframes chat-image-glow {
+	to {
+		mask-position: 70px 35px;
+		opacity: 1;
+	}
+}
+.tool-images.chat-generated-images {
+	padding: 0;
+	gap: 12px;
+	align-items: flex-start;
+}
+.chat-image-result-item {
+	position: relative;
+	width: min(400px, 100%);
+	max-width: 100%;
+}
+.tool-images .chat-image-open {
+	display: block;
+	width: 100%;
+	max-width: 100%;
+	border-radius: 14px;
+	overflow: hidden;
+}
+.tool-images .chat-image-open img {
+	width: 100%;
+	height: auto;
+	max-height: none;
+	border-radius: 14px;
+}
+.chat-image-open:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 4px;
+}
+.chat-image-status,
+.chat-image-load-error {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	font-size: 13px;
+	color: var(--muted);
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.chat-image-status[role='alert'] {
+	color: var(--danger);
+}
+.chat-image-status svg,
+.chat-image-load-error svg {
+	flex-shrink: 0;
+}
+.chat-image-load-error {
+	flex-wrap: wrap;
+}
+@media (prefers-reduced-motion: reduce) {
+	.is-creating .chat-image-dots::after {
+		animation: none;
+	}
+}

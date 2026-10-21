@@ -1,0 +1,87 @@
+.search-service-options {
+	display: inline-flex;
+	padding: 3px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	gap: 3px;
+	max-width: 100%;
+}
+.search-service-options > button {
+	border-radius: 7px;
+	padding: 7px 12px;
+	font-size: var(--font-size-ui);
+	white-space: nowrap;
+	color: var(--muted);
+}
+.search-service-options > button[aria-checked='true'] {
+	background: var(--hover);
+	color: var(--text);
+}
+.search-status-heading,
+.search-service-actions {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+}
+.search-service-actions {
+	justify-content: flex-end;
+	flex-wrap: wrap;
+}
+.search-status-dot {
+	width: 7px;
+	height: 7px;
+	border-radius: 50%;
+	background: var(--muted);
+	flex-shrink: 0;
+}
+.search-status-dot.running {
+	background: var(--success, #41b97d);
+}
+.search-engine-groups {
+	border: 0;
+	padding: 0;
+	margin: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 24px;
+	min-width: 0;
+}
+.search-engine-groups > legend {
+	font-size: 15px;
+	font-weight: 500;
+	padding: 0 0 8px;
+}
+.search-engine-groups > .settings-help {
+	margin: 0;
+}
+.search-engine-details summary,
+.search-service-logs summary {
+	font-size: var(--font-size-ui);
+	color: var(--muted);
+	cursor: pointer;
+}
+.search-engine-details ul {
+	margin-top: 10px;
+}
+.search-service-logs pre {
+	margin: 8px 0 0;
+	padding: 10px 12px;
+	background: var(--panel);
+	border-radius: 8px;
+	max-height: 300px;
+	overflow: auto;
+	font-size: 11px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+.search-settings .error-note {
+	margin: 0;
+	overflow-wrap: anywhere;
+}
+.search-settings .settings-row-description p {
+	margin: 3px 0 0;
+}
+.search-settings .settings-row-control > p {
+	margin: 0;
+}

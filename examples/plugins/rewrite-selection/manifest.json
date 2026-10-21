@@ -1,0 +1,16 @@
+{
+	"manifestVersion": 2,
+	"id": "dev.freelm.rewrite-selection",
+	"name": "Selected Text Tools",
+	"version": "1.0.0",
+	"description": "Shows how a general composer extension reads and edits selected text in an existing draft, without inference or conversation access.",
+	"author": "FreeLM example",
+	"auth": { "type": "none" },
+	"runtime": { "apiVersion": 2, "entry": "src/index.ts" },
+	"permissions": {
+		"network": [],
+		"storage": false,
+		"capabilities": ["composer.read", "composer.write", "composer.drawer", "commands"]
+	},
+	"contributes": { "activation": { "surfaces": ["home.chat", "home.code"] } }
+}

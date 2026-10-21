@@ -1,0 +1,23 @@
+.code-compaction-settings {
+	container-type: inline-size;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+	min-width: 0;
+}
+.code-compaction-fields {
+	display: block;
+	min-width: 0;
+	border: 0;
+	margin: 0;
+	padding: 0;
+}
+.code-compaction-preview {
+	display: block;
+}
+.code-compaction-fields input {
+	width: 100%;
+}
+.code-compaction-settings .settings-group-footer p {
+	margin: 0 0 8px;
+}

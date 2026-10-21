@@ -1,0 +1,479 @@
+{
+  "auditVersion": 1,
+  "auditedAt": "2026-10-17T19:48:48.501Z",
+  "rootRunId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429",
+  "passed": true,
+  "readOnly": true,
+  "root": {
+    "workflowId": "c2d1f75c-fbf6-4d30-b82f-2e2130a72091",
+    "workflowName": "Co-Scientist \u00b7 Local inference",
+    "status": "completed",
+    "createdAt": "2026-10-17T19:37:40.902Z",
+    "startedAt": "2026-10-17T19:37:40.920Z",
+    "finishedAt": "2026-10-17T19:47:52.576Z",
+    "durationMs": 611656,
+    "loopIterations": 2,
+    "stopConditionMet": true
+  },
+  "rounds": [
+    {
+      "id": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "iteration": 1,
+      "status": "completed",
+      "durationMs": 276310,
+      "resultBytes": 29465,
+      "startedAt": "2026-10-17T19:37:41.028Z",
+      "finishedAt": "2026-10-17T19:42:17.338Z"
+    },
+    {
+      "id": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "iteration": 2,
+      "status": "completed",
+      "durationMs": 302498,
+      "resultBytes": 35314,
+      "startedAt": "2026-10-17T19:42:17.419Z",
+      "finishedAt": "2026-10-17T19:47:19.917Z"
+    }
+  ],
+  "checks": [
+    {
+      "name": "root completed",
+      "passed": true,
+      "details": "completed"
+    },
+    {
+      "name": "all referenced child records available",
+      "passed": true,
+      "details": []
+    },
+    {
+      "name": "exactly two completed rounds",
+      "passed": true,
+      "details": [
+        {
+          "id": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+          "status": "completed",
+          "iteration": 1
+        },
+        {
+          "id": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+          "status": "completed",
+          "iteration": 2
+        }
+      ]
+    },
+    {
+      "name": "iterations are 1 and 2",
+      "passed": true
+    },
+    {
+      "name": "round 2 current exactly equals round 1 result",
+      "passed": true
+    },
+    {
+      "name": "round 2 value and previous match current",
+      "passed": true
+    },
+    {
+      "name": "all nested runs share root collection scope",
+      "passed": true,
+      "details": [
+        {
+          "id": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429",
+          "rootRunId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429",
+          "parentRunId": null
+        },
+        {
+          "id": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+          "rootRunId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429",
+          "parentRunId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429"
+        },
+        {
+          "id": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+          "rootRunId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429",
+          "parentRunId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429"
+        }
+      ]
+    },
+    {
+      "name": "loop durably accumulated two results",
+      "passed": true
+    },
+    {
+      "name": "loop final value matches final round",
+      "passed": true
+    },
+    {
+      "name": "parent read-history contains two unique saved records",
+      "passed": true
+    },
+    {
+      "name": "saved record data and provenance match both completed rounds",
+      "passed": true
+    },
+    {
+      "name": "exported rounds match collection records",
+      "passed": true
+    },
+    {
+      "name": "all 13 research agents completed with Qwen3.8 27B",
+      "passed": true,
+      "details": {
+        "count": 13,
+        "models": [
+          "qwen3.8-27b"
+        ]
+      }
+    },
+    {
+      "name": "all agent outputs independently match their saved JSON schemas",
+      "passed": true
+    },
+    {
+      "name": "all validation-attempt counters are within configured bounds",
+      "passed": true
+    },
+    {
+      "name": "recorded successful tools are selected and have outputs",
+      "passed": true
+    },
+    {
+      "name": "two round contexts and one report context are bounded and canonical",
+      "passed": true
+    },
+    {
+      "name": "final report is a nonempty Markdown string",
+      "passed": true
+    },
+    {
+      "name": "rendered report agrees with named output",
+      "passed": true
+    }
+  ],
+  "failures": [],
+  "warnings": [
+    "No successful tool calls were recorded. Selected tools alone do not prove retrieval; do not claim fresh web research from this audit."
+  ],
+  "agents": [
+    {
+      "runId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429",
+      "iteration": null,
+      "nodeId": "synthesize",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 32215,
+      "outputBytes": 6031,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "iteration": 1,
+      "nodeId": "generate",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [
+        "web.run"
+      ],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 93734,
+      "outputBytes": 3155,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "iteration": 1,
+      "nodeId": "proximity",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 17876,
+      "outputBytes": 3664,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "iteration": 1,
+      "nodeId": "review",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [
+        "web.run"
+      ],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 42725,
+      "outputBytes": 12613,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "iteration": 1,
+      "nodeId": "rank",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 51277,
+      "outputBytes": 1829,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "iteration": 1,
+      "nodeId": "evolve",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 47834,
+      "outputBytes": 8600,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "iteration": 1,
+      "nodeId": "meta",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 22386,
+      "outputBytes": 2614,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "iteration": 2,
+      "nodeId": "generate",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [
+        "web.run"
+      ],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 86127,
+      "outputBytes": 4340,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "iteration": 2,
+      "nodeId": "proximity",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 38019,
+      "outputBytes": 6201,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "iteration": 2,
+      "nodeId": "review",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [
+        "web.run"
+      ],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 47613,
+      "outputBytes": 13762,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "iteration": 2,
+      "nodeId": "rank",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 35483,
+      "outputBytes": 4317,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "iteration": 2,
+      "nodeId": "evolve",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 58167,
+      "outputBytes": 6321,
+      "successfulRecordedTools": 0
+    },
+    {
+      "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "iteration": 2,
+      "nodeId": "meta",
+      "status": "completed",
+      "connectionId": "d6f56042-485a-42d6-8cf9-f0905acfa30c",
+      "model": "qwen3.8-27b",
+      "thinkingMode": "medium",
+      "selectedTools": [],
+      "responseFormat": "json",
+      "validationRetries": 1,
+      "validationAttempts": 1,
+      "schemaValid": true,
+      "schemaError": null,
+      "durationMs": 36280,
+      "outputBytes": 1743,
+      "successfulRecordedTools": 0
+    }
+  ],
+  "successfulRecordedTools": [],
+  "contexts": [
+    {
+      "runId": "ee39d1f7-f83f-46a3-b05c-dc15f7b48429",
+      "nodeId": "prepare-report",
+      "status": "completed",
+      "iteration": 2,
+      "contextBytes": 36097,
+      "contextCharacters": 35898,
+      "currentBytes": 35314,
+      "historyBytes": 746,
+      "historyEntries": 1,
+      "canonicalShape": true,
+      "olderHistoryOnly": true,
+      "withinCharacterBudget": true
+    },
+    {
+      "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+      "nodeId": "prepare-round",
+      "status": "completed",
+      "iteration": 1,
+      "contextBytes": 225,
+      "contextCharacters": 225,
+      "currentBytes": 186,
+      "historyBytes": 2,
+      "historyEntries": 0,
+      "canonicalShape": true,
+      "olderHistoryOnly": true,
+      "withinCharacterBudget": true
+    },
+    {
+      "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+      "nodeId": "prepare-round",
+      "status": "completed",
+      "iteration": 2,
+      "contextBytes": 29504,
+      "contextCharacters": 29381,
+      "currentBytes": 29465,
+      "historyBytes": 2,
+      "historyEntries": 0,
+      "canonicalShape": true,
+      "olderHistoryOnly": true,
+      "withinCharacterBudget": true
+    }
+  ],
+  "collection": {
+    "count": 2,
+    "totalDataBytes": 64779,
+    "records": [
+      {
+        "id": "record-3711149d2e088ced24a498612e13b744",
+        "revision": 1,
+        "dataBytes": 29465,
+        "provenance": {
+          "runId": "71e5c434-0f17-4895-bccb-b33c42ab6c71",
+          "nodeId": "save-round",
+          "workflowId": "bfea34c9-df69-4bc1-8da8-8abb52d1dbc9"
+        }
+      },
+      {
+        "id": "record-cea986159d4c8f86a10b9e9011adcf50",
+        "revision": 1,
+        "dataBytes": 35314,
+        "provenance": {
+          "runId": "536c84c1-6775-42dd-96a4-5e243484fcb9",
+          "nodeId": "save-round",
+          "workflowId": "bfea34c9-df69-4bc1-8da8-8abb52d1dbc9"
+        }
+      }
+    ]
+  },
+  "report": {
+    "type": "string",
+    "bytes": 5895,
+    "characters": 5869,
+    "sourceCount": 4
+  },
+  "caveat": "Mechanical workflow audit only. Schema-valid output and recorded tool calls do not establish scientific correctness or validate cited claims."
+}

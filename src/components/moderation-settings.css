@@ -1,0 +1,44 @@
+.moderation-settings {
+	display: flex;
+	flex-direction: column;
+	gap: var(--settings-group-gap);
+	min-width: 0;
+}
+.moderation-rubric {
+	min-width: 0;
+}
+.moderation-configuration-warning {
+	margin: 0;
+	color: var(--text);
+	font-size: var(--font-size-ui);
+	line-height: 1.4;
+}
+.moderation-settings-explanation {
+	margin: 0;
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.4;
+}
+.moderation-rubric summary {
+	width: fit-content;
+	color: var(--muted);
+	cursor: pointer;
+	font-size: var(--font-size-ui);
+	line-height: 1.4;
+}
+.moderation-rubric summary:hover {
+	color: var(--text);
+}
+.moderation-rubric > p {
+	color: var(--muted);
+	font-size: 12px;
+	line-height: 1.4;
+	margin: 10px 0;
+}
+.moderation-rubric textarea {
+	width: 100%;
+	min-height: 180px;
+	max-height: 360px;
+	font-family: var(--font-mono, monospace);
+	resize: vertical;
+}
