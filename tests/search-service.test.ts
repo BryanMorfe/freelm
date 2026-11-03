@@ -60,7 +60,7 @@ type FakeOptions = {
 
 async function fixture(
 	fake: FakeOptions = {},
-	options: { startupTimeoutMs?: number; allocatePort?: () => Promise<number> } = {},
+	options: { startupTimeoutMs?: number; allocatePort?: () => Promise<number>; recoveryDelaysMs?: number[] } = {},
 ) {
 	const folder = await mkdtemp(path.join(os.tmpdir(), 'freelm-search-manager-'));
 	folders.push(folder);
@@ -89,6 +89,7 @@ if (fake.ignoreTerm) process.on('SIGTERM', () => {});
 if (fake.neverReady) setInterval(() => {}, 500);
 else setTimeout(() => {
  const server = http.createServer((req,res) => {
+  if (req.url === '/synthetic-query') { fs.appendFileSync(home + '/queries', 'x'); return; }
   if (req.url === '/healthz') {
    res.setHeader('Content-Type', fake.healthHtml ? 'text/html' : 'text/plain');
    res.setHeader('X-FreeLM-Search-Instance', process.env.FREELM_SEARCH_INSTANCE_ID);
@@ -118,6 +119,7 @@ if (fake.crashAfter) setTimeout(() => process.exit(7), fake.crashAfter);
 		pollIntervalMs: 25,
 		stopTimeoutMs: 75,
 		...(options.allocatePort ? { allocatePort: options.allocatePort } : {}),
+		recoveryDelaysMs: options.recoveryDelaysMs ?? [100, 150],
 	});
 	managers.push(manager);
 	await manager.ready;
@@ -245,15 +247,36 @@ describe('bundled search lifecycle', () => {
 		expect(status.message).toContain('Another process occupied');
 	});
 
-	it('reports unexpected helper exit once and does not automatically restart', async () => {
-		const { manager, searchHome } = await fixture({ crashAfter: 300 });
-		expect((await manager.start(['bing'])).phase).toBe('running');
+	it('restarts an unexpectedly exited helper without replaying an interrupted query', async () => {
+		const { manager, searchHome, folder } = await fixture({ crashAfter: 300 });
+		const status = await manager.start(['bing']);
+		expect(status.phase).toBe('running');
 		const pid = JSON.parse(await readFile(path.join(searchHome, 'child.json'), 'utf8')).pid;
+		const query = fetch(`${status.url}/synthetic-query`).then(() => false, () => true);
 		await waitFor(() => manager.status().phase === 'error');
-		expect(manager.status().message).toContain('exit 7');
-		await new Promise((resolve) => setTimeout(resolve, 350));
+		expect(await query).toBe(true);
+		await writeFile(path.join(folder, 'fake.json'), '{}');
+		await waitFor(() => manager.status().phase === 'running');
+		expect(JSON.parse(await readFile(path.join(searchHome, 'child.json'), 'utf8')).pid).not.toBe(pid);
+		expect(await readFile(path.join(searchHome, 'queries'), 'utf8')).toBe('x');
+	});
+
+	it('cuts off repeated helper crashes and cancels a pending restart on Stop', async () => {
+		const { manager, searchHome } = await fixture({ crashAfter: 300 });
+		await manager.start(['bing']);
+		await waitFor(() => !!manager.status().message?.includes('Automatic recovery is paused'));
+		const pid = JSON.parse(await readFile(path.join(searchHome, 'child.json'), 'utf8')).pid;
+		await new Promise((r) => setTimeout(r, 250));
+		expect(manager.status().phase).toBe('error');
 		expect(JSON.parse(await readFile(path.join(searchHome, 'child.json'), 'utf8')).pid).toBe(pid);
-		expect(manager.status().url).toBeUndefined();
+		const other = await fixture({ crashAfter: 300 }, { recoveryDelaysMs: [250] });
+		await other.manager.start(['bing']);
+		await waitFor(() => other.manager.status().phase === 'error');
+		const stoppedPid = JSON.parse(await readFile(path.join(other.searchHome, 'child.json'), 'utf8')).pid;
+		await other.manager.stop();
+		await new Promise((r) => setTimeout(r, 350));
+		expect(other.manager.status().phase).toBe('stopped');
+		expect(JSON.parse(await readFile(path.join(other.searchHome, 'child.json'), 'utf8')).pid).toBe(stoppedPid);
 	});
 
 	it('escalates shutdown to SIGKILL for a helper that ignores SIGTERM', async () => {

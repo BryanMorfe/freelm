@@ -1,3 +1,4 @@
+import { validBotAttachments } from './bot-attachments';
 import type { AppState, Attachment, Message } from '../types';
 import { conversationNodes } from './conversation-tree';
 import { decodeAttachmentText, textAttachment } from './text-attachments';
@@ -122,6 +123,7 @@ export function resolveBotThreadAttachments(
 	value: unknown,
 	state: AppState,
 	hostId: string | undefined,
+	deliveryOnly = false,
 ): Attachment[] {
 	if (value === undefined) return [];
 	if (!Array.isArray(value) || value.length < 1 || value.length > MAX_BOT_ATTACHMENTS)
@@ -151,15 +153,15 @@ export function resolveBotThreadAttachments(
 				'This thread attachment is no longer available. Read the source thread again.',
 			);
 		let attachment = stored.attachment;
-		if (!supported(attachment))
+		if (deliveryOnly ? !validBotAttachments([attachment]) : !supported(attachment))
 			throw new Error(
 				'Only stored image and text attachments up to 32 MB can be forwarded to Chat or Code.',
 			);
-		if (attachment.type === 'application/json') {
+		if (!deliveryOnly && attachment.type === 'application/json') {
 			const text = decodeAttachmentText(attachment);
 			if (text === undefined) throw new Error('Could not decode this document.');
 			attachment = textAttachment(attachment.name, text);
-		} else if (/^text\//.test(attachment.type)) {
+		} else if (!deliveryOnly && /^text\//.test(attachment.type)) {
 			// Validate before committing a queued input that the provider cannot decode.
 			decodeAttachmentText(attachment);
 		}

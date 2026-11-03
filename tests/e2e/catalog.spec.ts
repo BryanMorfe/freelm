@@ -892,3 +892,133 @@ test('unconfigured thinking blocks chat and settings requires a concrete value',
 		)
 		.toBe('off');
 });
+
+test('explicit Standard mode stays opt-in, saves, reopens, and omits reasoning parameters', async ({
+	page,
+}) => {
+	test.setTimeout(300_000);
+	const state = makeState();
+	state.connections[0].models.chat = 'chat-text';
+	state.connections[0].catalog = structuredClone(definitions);
+	const definition = state.connections[0].catalog.find((model) => model.id === 'chat-text')!;
+	definition.thinkingModes = [];
+	definition.defaultThinkingMode = undefined;
+	const requests = await mockProvider(page);
+	await seedCatalog(page, state);
+	const errors: string[] = [];
+	page.on('pageerror', (error) => errors.push(error.message));
+	await page.getByLabel('Message', { exact: true }).fill('Standard mode fixture');
+	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+	await page.getByRole('button', { name: /Personal workspace/ }).click();
+	const settings = page.getByRole('region', { name: 'Settings', exact: true });
+	await settings.getByRole('button', { name: 'Edit model Text only', exact: true }).click();
+	await settings.getByRole('button', { name: 'Add Standard mode', exact: true }).click();
+	await expect(settings.getByLabel('Thinking mode 1 use provider defaults')).toBeChecked();
+	await settings.getByRole('button', { name: 'Cancel model changes', exact: true }).click();
+	await settings.getByRole('button', { name: 'Back to workspace', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+	await page.getByRole('button', { name: /Personal workspace/ }).click();
+	await settings.getByRole('button', { name: 'Edit model Text only', exact: true }).click();
+	await settings.getByRole('button', { name: 'Add Standard mode', exact: true }).click();
+	await settings.getByRole('button', { name: 'Apply model', exact: true }).click();
+	await settings.getByRole('button', { name: 'Save settings', exact: true }).click();
+	await settings.getByRole('button', { name: 'Back to workspace', exact: true }).click();
+	await expect(page.getByRole('button', { name: 'Chat model', exact: true })).toContainText(
+		'Standard',
+	);
+	await page.getByRole('button', { name: 'Send message', exact: true }).click();
+	await expect(page.locator('.message.assistant')).toContainText('Catalog answer.');
+	const body = requests[0].postDataJSON();
+	for (const key of ['reasoning', 'reasoning_effort', 'useProviderDefaults'])
+		expect(body).not.toHaveProperty(key);
+	await expect
+		.poll(async () => (await persistedState(page)).threads[0]?.messages.at(-1)?.content)
+		.toBe('Catalog answer.');
+	await page.reload();
+	await expect(page.getByRole('status', { name: 'Loading workspace', exact: true })).toBeHidden({
+		timeout: 30_000,
+	});
+	await expect(page.getByRole('button', { name: 'Chat model', exact: true })).toContainText(
+		'Standard',
+	);
+	await page.getByRole('button', { name: 'Standard mode fixture', exact: true }).click();
+	await expect(page.locator('.message.assistant')).toContainText('Catalog answer.');
+	await page.screenshot({ path: '/tmp/freelm-standard-mode-chat.png' });
+	await page.getByRole('button', { name: /Personal workspace/ }).click();
+	await settings.getByRole('button', { name: 'Edit model Text only', exact: true }).click();
+	await expect(settings.getByLabel('Thinking mode 1 use provider defaults')).toBeChecked();
+	await page.setViewportSize({ width: 720, height: 900 });
+	await settings
+		.getByRole('button', { name: 'Add Standard mode', exact: true })
+		.scrollIntoViewIfNeeded();
+	await page.screenshot({ path: '/tmp/freelm-standard-mode-settings-narrow.png' });
+	expect(errors).toEqual([]);
+});
+
+test('provider-default toggles preserve custom JSON drafts and cancel restores saved parameters', async ({
+	page,
+}) => {
+	test.setTimeout(300_000);
+	const mode = {
+		id: 'custom',
+		name: 'Custom',
+		parameters: {
+			responses: { reasoning: { effort: 'high' } },
+			chat: { reasoning_effort: 'high' },
+		},
+	};
+	const state = makeState();
+	state.connections[0].models.chat = 'chat-text';
+	state.connections[0].catalog = [
+		{
+			id: 'chat-text',
+			name: 'Toggle fixture',
+			enabled: true,
+			tasks: ['chat'],
+			inputModalities: ['text'],
+			outputModalities: ['text'],
+			thinkingModes: [mode],
+			defaultThinkingMode: 'custom',
+		},
+	];
+	await seedCatalog(page, state);
+	await page.getByRole('button', { name: /Personal workspace/ }).click();
+	const settings = page.getByRole('region', { name: 'Settings', exact: true });
+	await settings.getByRole('button', { name: 'Edit model Toggle fixture', exact: true }).click();
+	await settings.getByText('Request parameters', { exact: true }).click();
+	const responses = settings.getByLabel('Thinking mode 1 Responses JSON');
+	const chat = settings.getByLabel('Thinking mode 1 Chat JSON');
+	const toggle = settings.getByLabel('Thinking mode 1 use provider defaults');
+	const responseDraft = '{"reasoning":{"effort":"medium"},"custom_budget":256}';
+	const chatDraft = '{"reasoning_effort":"low","custom_budget":256}';
+	await responses.fill(responseDraft);
+	await chat.fill(chatDraft);
+	for (let cycle = 0; cycle < 2; cycle++) {
+		await toggle.click();
+		await expect(toggle).toBeChecked();
+		await expect(responses).toBeDisabled();
+		await expect(chat).toBeDisabled();
+		await toggle.click();
+		await expect(responses).toBeEnabled();
+		await expect(responses).toHaveValue(responseDraft);
+		await expect(chat).toHaveValue(chatDraft);
+	}
+	await settings.getByRole('button', { name: 'Cancel model changes', exact: true }).click();
+	await settings.getByRole('button', { name: 'Edit model Toggle fixture', exact: true }).click();
+	await settings.getByText('Request parameters', { exact: true }).click();
+	await expect(toggle).not.toBeChecked();
+	await expect(responses).toHaveValue(JSON.stringify(mode.parameters.responses, null, 2));
+	await expect(chat).toHaveValue(JSON.stringify(mode.parameters.chat, null, 2));
+	// Applying defaults omits the preserved draft tuning instead of accidentally sending it.
+	await toggle.click();
+	await settings.getByRole('button', { name: 'Apply model', exact: true }).click();
+	await settings.getByRole('button', { name: 'Save settings', exact: true }).click();
+	await expect
+		.poll(async () => (await persistedState(page)).connections[0].catalog![0].thinkingModes[0])
+		.toEqual({
+			id: 'custom',
+			name: 'Custom',
+			useProviderDefaults: true,
+			parameters: { responses: {}, chat: {} },
+		});
+});

@@ -175,20 +175,39 @@
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
-	height: 48px;
-	padding: 0 13px 0 8px;
+	height: var(--panel-header-height);
+	padding: 0 var(--panel-header-trailing) 0 var(--panel-header-leading);
 	flex-shrink: 0;
 }
-.sidebar-panel-header .sidebar-mode-picker {
-	min-height: 34px;
-	padding: 5px 9px;
+.sidebar-panel-header .sidebar-mode-picker,
+.sidebar-panel-header .sidebar-panel-title {
+	min-height: var(--panel-title-height);
+	padding: 5px var(--panel-title-inset);
 	gap: 6px;
 	border: 0;
 	border-radius: 9px;
 	background: transparent;
-	font-size: 16px;
-	font-weight: 550;
-	letter-spacing: -0.25px;
+	font-size: var(--font-size-panel-title);
+	font-weight: var(--font-weight-panel-title);
+	line-height: var(--line-height-panel-title);
+	letter-spacing: var(--tracking-panel-title);
+}
+.sidebar-panel-header .sidebar-panel-title {
+	display: flex;
+	align-items: center;
+	margin: 0;
+}
+.sidebar-panel-header .sidebar-mode-picker {
+	width: fit-content;
+	max-width: 100%;
+}
+.sidebar-panel-search {
+	margin: 0 12px 12px;
+}
+.sidebar-panel-search input {
+	width: 100%;
+	min-width: 0;
+	font-size: var(--font-size-ui);
 }
 .sidebar-panel-header .sidebar-mode-picker > svg:last-child {
 	width: 12px;
@@ -312,9 +331,10 @@
 	height: 26px;
 	padding: 0;
 	opacity: 0;
-	pointer-events: none;
+	/* Keep the hit target available before hover (direct clicks and touch input). */
+	pointer-events: auto;
 }
-.project-new-chat[aria-expanded="true"],
+.project-new-chat[aria-expanded='true'],
 .project-row:hover .project-new-chat,
 .project-row:focus-within .project-new-chat {
 	opacity: 1;

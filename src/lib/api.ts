@@ -140,7 +140,7 @@ function errorMessage(value: unknown, fallback = 'The API request failed.'): str
 
 async function request(
 	connection: Connection,
-	input: Pick<WireRequest, 'path' | 'method' | 'body' | 'form' | 'stream'>,
+	input: Pick<WireRequest, 'path' | 'method' | 'body' | 'form' | 'stream' | 'providerCaller'>,
 	signal?: AbortSignal,
 	onChunk: (text: string) => void = () => {},
 ): Promise<WireResponse> {
@@ -151,10 +151,12 @@ async function request(
 		id: crypto.randomUUID(),
 		workspaceId,
 		connectionId: connection.id,
+		...(connection.providerAdapter ? { providerAdapterRequired: true } : {}),
 		baseUrl: workspaceId === 'local' ? connection.baseUrl : '',
 		apiKey: workspaceId === 'local' ? connection.apiKey : '',
 	};
 	const desktop = typeof window === 'undefined' ? undefined : window.desktop;
+	if (connection.providerAdapter && (!desktop || workspaceId !== 'local')) throw new Error('Provider adapters currently require the local desktop workspace.');
 	let response: WireResponse;
 	if (desktop) {
 		let deliveredCharacters = 0;
@@ -232,6 +234,13 @@ function contentText(value: unknown): string {
 		.join('');
 }
 
+/** Treat JSON fallbacks and streamed completions identically. */
+function completionError(reason: unknown): Error | undefined {
+	if (reason === 'length') return new Error('The response reached the provider output limit.');
+	if (reason === 'content_filter')
+		return new Error('The provider stopped this response with a content filter.');
+}
+
 function responseText(data: Json): string {
 	if (typeof data.output_text === 'string') return data.output_text;
 	if (Array.isArray(data.output))
@@ -255,6 +264,7 @@ export async function streamChat(
 	thinkingMode?: string,
 	onPhase?: (phase: 'working' | 'responding') => void,
 	onRequest?: (instructions: string) => void,
+	providerCaller: 'chat' | 'code' = 'chat',
 ): Promise<void> {
 	onPhase?.('working');
 	if (!model.trim()) throw new Error('Choose a chat model first.');
@@ -402,10 +412,7 @@ export async function streamChat(
 			emit(contentText(choice.delta?.content) || contentText(choice.delta?.refusal));
 			if (choice.finish_reason) {
 				terminal = true;
-				if (choice.finish_reason === 'length')
-					streamError = new Error('The response reached the provider output limit.');
-				else if (choice.finish_reason === 'content_filter')
-					streamError = new Error('The provider stopped this response with a content filter.');
+				streamError = completionError(choice.finish_reason);
 			}
 		}
 	});
@@ -415,7 +422,7 @@ export async function streamChat(
 		onRequest?.(instructions.trim());
 		result = await request(
 			connection,
-			{ method: 'POST', path: `/${connection.chatApi}`, body, stream: true },
+			{ method: 'POST', path: `/${connection.chatApi}`, body, stream: true, providerCaller: { surface: providerCaller } },
 			signal,
 			(text) => {
 				receivedCharacters += text.length;
@@ -448,8 +455,13 @@ export async function streamChat(
 			);
 	} else {
 		const data = json(result);
-		if (data.status === 'failed' || data.status === 'incomplete')
-			throw new Error(errorMessage(data, `The response was ${data.status}.`));
+		if (data.status === 'incomplete')
+			throw new Error(
+				`The response was incomplete: ${data.incomplete_details?.reason || 'generation stopped early'}.`,
+			);
+		if (data.status === 'failed') throw new Error(errorMessage(data, 'The response was failed.'));
+		const failure = completionError(data.choices?.[0]?.finish_reason);
+		if (failure) throw failure;
 		emit(responseText(data));
 	}
 	if (!emitted)

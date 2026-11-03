@@ -79,9 +79,12 @@ async function fixture(page: Page) {
 		JSON.stringify({ state, manifest, settings: defaultPluginSettings(manifest) }),
 	);
 	await page.goto('/');
-	await page.getByRole('button', { name: 'Personal workspace settings', exact: true }).click();
-	const settings = page.getByRole('region', { name: 'Settings', exact: true });
-	await settings.getByRole('button', { name: 'Plugins', exact: true }).click();
+	await page
+		.getByRole('navigation', { name: 'Workspaces', exact: true })
+		.getByRole('button', { name: 'Plugins', exact: true })
+		.click();
+	const settings = page.getByRole('region', { name: 'Plugins', exact: true });
+	await settings.getByRole('button', { name: 'View Follow-up Prompts', exact: true }).click();
 	return settings;
 }
 

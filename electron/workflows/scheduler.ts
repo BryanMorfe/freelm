@@ -23,6 +23,8 @@ export interface WorkflowSchedulerOptions {
 	start: (
 		workflowId: string,
 		options: { trigger: WorkflowTrigger; overlap?: 'skip' | 'queue' },
+		definition: WorkflowDefinition,
+		definitions: WorkflowDefinition[],
 	) => Promise<unknown>;
 	now?: () => number;
 	onError?: (error: unknown) => void;
@@ -49,7 +51,8 @@ export class WorkflowScheduler {
 		return this.ticking;
 	}
 	private async check(now: number): Promise<void> {
-		for (const workflow of this.options.workflows()) {
+		const definitions = this.options.workflows();
+		for (const workflow of definitions) {
 			if (!workflow.enabled) continue;
 			for (const node of workflow.nodes.filter((node) => node.type === 'schedule')) {
 				try {
@@ -86,7 +89,7 @@ export class WorkflowScheduler {
 									key: `${key}:${due}`,
 									payload: { scheduledAt: due },
 								},
-							});
+								}, workflow, definitions);
 						}
 					}
 					const nextAt =

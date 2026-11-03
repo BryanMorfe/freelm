@@ -50,6 +50,7 @@ export async function generatePluginText(
 		const parser = createBotProviderStream(responses, () => {}, { maxTextCharacters: 128000 });
 		const reply = await execute(model.hostId, {
 			id: randomUUID(), workspaceId: model.hostId, connectionId: connection.id,
+            ...(connection.providerAdapter ? { providerAdapterRequired: true } : {}),
 			baseUrl: model.hostId === 'local' ? connection.baseUrl : '',
 			apiKey: model.hostId === 'local' ? connection.apiKey : '',
 			method: 'POST', path: responses ? '/responses' : '/chat/completions', body, stream: streaming,

@@ -434,3 +434,15 @@ it('exposes the stable host operation identity in the isolated SDK context', asy
 		await run(code, 'read_note', 'tool', {}, undefined, { operationId: 'bot:durable-operation' }),
 	).toEqual({ operationId: 'bot:durable-operation' });
 });
+
+it('compiles the provider-only SDK example package and runs its adapter in the sandbox', async () => {
+ const { runProviderAdapter } = await import('../../electron/plugins/provider');
+ const files: Record<string, Uint8Array> = {};
+ for (const name of ['manifest.json','index.ts','unconventional.ts','anthropic-like.ts']) files[name]=await readFile(path.join(process.cwd(),'examples/plugins/provider-adapters',name));
+ const fixture=await store();
+ const reviewed=await fixture.store.prepare(zipSync(files));
+ const installed=await fixture.store.consume(reviewed.reviewId);
+ const manifest=reviewed.manifest;
+ const result=await runProviderAdapter({code:await fixture.store.readBundle(installed.hash),declaration:manifest.contributes.providers![0],baseUrl:'https://fixture.invalid',allowedOrigins:manifest.permissions.network,assertAccess(){},workerPath}, {version:1,model:'fixture',system:'',messages:[{role:'user',text:'Hello'}],tools:[],maxOutputTokens:100,stream:false},()=>{},new AbortController().signal,async()=>new Response('{"answer":{"text":"Package works"}}'));
+ expect(result.text).toBe('Package works');
+});

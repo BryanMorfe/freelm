@@ -1,25 +1,16 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { lstat, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
-import { inflateRaw } from 'node:zlib';
 import { Worker } from 'node:worker_threads';
 import type { PluginLocalManifest, PluginPackagePreview } from '../../src/plugin-types';
-import { pluginPackagePath, validatePluginManifest } from '../../src/lib/plugin-manifest';
+import { validatePluginManifest } from '../../src/lib/plugin-manifest';
 import { pluginWorkerPath } from './runtime';
+import { PLUGIN_ARCHIVE_LIMITS, unpackPluginArchive } from './archive';
 
-export const PACKAGE_LIMITS = {
-	archiveBytes: 8 * 1024 * 1024,
-	unpackedBytes: 24 * 1024 * 1024,
-	fileBytes: 4 * 1024 * 1024,
-	entries: 256,
-	ratio: 100,
-	previewTTL: 10 * 60_000,
-	previews: 3,
-};
-interface SourceFile {
-	name: string;
-	data: Uint8Array;
-}
+function error(message: string): never { throw new Error(message); }
+
+export const PACKAGE_LIMITS = { ...PLUGIN_ARCHIVE_LIMITS, previewTTL: 10 * 60_000, previews: 3 };
+interface SourceFile { name: string; data: Uint8Array }
 interface Reviewed {
 	manifest: PluginLocalManifest;
 	files: SourceFile[];
@@ -35,166 +26,6 @@ interface Options {
 	compilerWorkerPath?: string;
 	compileTimeoutMs?: number;
 	now?: () => number;
-}
-const crcTable = Array.from({ length: 256 }, (_, index) => {
-	let value = index;
-	for (let i = 0; i < 8; i++) value = value & 1 ? 0xedb88320 ^ (value >>> 1) : value >>> 1;
-	return value >>> 0;
-});
-function crc32(data: Uint8Array) {
-	let crc = 0xffffffff;
-	for (const byte of data) crc = crcTable[(crc ^ byte) & 255] ^ (crc >>> 8);
-	return (crc ^ 0xffffffff) >>> 0;
-}
-function error(message: string): never {
-	throw new Error(message);
-}
-/** Parse and bound central/local records before asynchronous, output-limited inflation. */
-async function unpack(bytes: Uint8Array): Promise<SourceFile[]> {
-	if (
-		!(bytes instanceof Uint8Array) ||
-		bytes.byteLength < 22 ||
-		bytes.byteLength > PACKAGE_LIMITS.archiveBytes
-	)
-		error('Plugin ZIP must be at most 8 MiB.');
-	const buffer = Buffer.from(bytes),
-		length = buffer.length;
-	let eocd = -1;
-	for (let offset = length - 22; offset >= Math.max(0, length - 65557); offset--)
-		if (
-			buffer.readUInt32LE(offset) === 0x06054b50 &&
-			offset + 22 + buffer.readUInt16LE(offset + 20) === length
-		) {
-			eocd = offset;
-			break;
-		}
-	if (eocd < 0) error('Invalid plugin ZIP directory.');
-	const count = buffer.readUInt16LE(eocd + 10),
-		centralSize = buffer.readUInt32LE(eocd + 12),
-		centralStart = buffer.readUInt32LE(eocd + 16);
-	if (
-		buffer.readUInt16LE(eocd + 4) ||
-		buffer.readUInt16LE(eocd + 6) ||
-		buffer.readUInt16LE(eocd + 8) !== count ||
-		count < 1 ||
-		count > PACKAGE_LIMITS.entries ||
-		centralStart + centralSize !== eocd
-	)
-		error('Split, ZIP64, empty, or oversized ZIP archives are unsupported.');
-	const entries: { name: string; data: Buffer; method: number; size: number; crc: number }[] = [],
-		names = new Set<string>(),
-		ranges: { start: number; end: number }[] = [];
-	let cursor = centralStart,
-		total = 0;
-	const decoder = new TextDecoder('utf-8', { fatal: true });
-	for (let index = 0; index < count; index++) {
-		if (cursor + 46 > eocd || buffer.readUInt32LE(cursor) !== 0x02014b50)
-			error('Invalid plugin ZIP entry.');
-		const flags = buffer.readUInt16LE(cursor + 8),
-			method = buffer.readUInt16LE(cursor + 10),
-			crc = buffer.readUInt32LE(cursor + 16),
-			packed = buffer.readUInt32LE(cursor + 20),
-			size = buffer.readUInt32LE(cursor + 24),
-			nameLength = buffer.readUInt16LE(cursor + 28),
-			extraLength = buffer.readUInt16LE(cursor + 30),
-			commentLength = buffer.readUInt16LE(cursor + 32),
-			attributes = buffer.readUInt32LE(cursor + 38),
-			local = buffer.readUInt32LE(cursor + 42);
-		if (
-			cursor + 46 + nameLength + extraLength + commentLength > eocd ||
-			buffer.readUInt16LE(cursor + 34) !== 0 ||
-			!nameLength ||
-			flags & 1 ||
-			![0, 8].includes(method) ||
-			size > PACKAGE_LIMITS.fileBytes ||
-			packed > PACKAGE_LIMITS.archiveBytes ||
-			size > Math.max(4096, packed * PACKAGE_LIMITS.ratio)
-		)
-			error('Plugin ZIP entry exceeds supported compression or size limits.');
-		const mode = (attributes >>> 16) & 0xf000;
-		if (mode && mode !== 0x8000 && mode !== 0x4000)
-			error('Plugin ZIP cannot contain symlinks or special files.');
-		let name: string;
-		try {
-			name = decoder.decode(buffer.subarray(cursor + 46, cursor + 46 + nameLength));
-		} catch {
-			error('Plugin ZIP paths must be UTF-8.');
-		}
-		const directory = name!.endsWith('/');
-		name = pluginPackagePath(directory ? name!.slice(0, -1) : name!);
-		if ((mode === 0x4000 && !directory) || names.has(name.toLowerCase()))
-			error('Plugin ZIP has duplicate or conflicting paths.');
-		names.add(name.toLowerCase());
-		if (local + 30 > centralStart || buffer.readUInt32LE(local) !== 0x04034b50)
-			error('Invalid plugin ZIP local entry.');
-		const localFlags = buffer.readUInt16LE(local + 6),
-			localMethod = buffer.readUInt16LE(local + 8),
-			localNameLength = buffer.readUInt16LE(local + 26),
-			localExtraLength = buffer.readUInt16LE(local + 28),
-			dataStart = local + 30 + localNameLength + localExtraLength;
-		if (
-			localFlags !== flags ||
-			localMethod !== method ||
-			localNameLength !== nameLength ||
-			dataStart + packed > centralStart ||
-			!buffer
-				.subarray(local + 30, local + 30 + localNameLength)
-				.equals(buffer.subarray(cursor + 46, cursor + 46 + nameLength))
-		)
-			error('Plugin ZIP local and central paths or sizes disagree.');
-		if (
-			!(flags & 8) &&
-			(buffer.readUInt32LE(local + 14) !== crc ||
-				buffer.readUInt32LE(local + 18) !== packed ||
-				buffer.readUInt32LE(local + 22) !== size)
-		)
-			error('Plugin ZIP local sizes disagree.');
-		ranges.push({ start: local, end: dataStart + packed });
-		if (directory) {
-			if (size || packed) error('Plugin ZIP directory contains data.');
-		} else {
-			total += size;
-			if (total > PACKAGE_LIMITS.unpackedBytes) error('Plugin ZIP expands beyond 24 MiB.');
-			entries.push({
-				name,
-				data: buffer.subarray(dataStart, dataStart + packed),
-				method,
-				size,
-				crc,
-			});
-		}
-		cursor += 46 + nameLength + extraLength + commentLength;
-	}
-	if (cursor !== eocd) error('Invalid plugin ZIP directory size.');
-	ranges.sort((a, b) => a.start - b.start);
-	if (ranges.some((range, index) => index > 0 && range.start < ranges[index - 1].end))
-		error('Plugin ZIP entries overlap.');
-	for (const entry of entries)
-		for (const other of entries)
-			if (other.name.startsWith(entry.name + '/'))
-				error('Plugin ZIP has conflicting file and folder paths.');
-	const result: SourceFile[] = [];
-	for (const entry of entries) {
-		const data =
-			entry.method === 0
-				? entry.data
-				: await new Promise<Buffer>((resolve, reject) =>
-						inflateRaw(
-							entry.data,
-							{ maxOutputLength: Math.max(1, entry.size) },
-							(failure, output) =>
-								failure
-									? reject(
-											new Error('Plugin ZIP expansion exceeded its declared size or is corrupt.'),
-										)
-									: resolve(output),
-						),
-					);
-		if (data.length !== entry.size || crc32(data) !== entry.crc)
-			error('Plugin ZIP contents do not match their directory.');
-		result.push({ name: entry.name, data: new Uint8Array(data) });
-	}
-	return result;
 }
 function escapeHTML(text: string) {
 	return text.replace(
@@ -231,7 +62,7 @@ export class PluginPackageStore {
 			if (!(bytes instanceof Uint8Array) || bytes.byteLength > PACKAGE_LIMITS.archiveBytes)
 				error('Plugin ZIP must be at most 8 MiB.');
 			bytes = Uint8Array.from(bytes);
-			const files = await unpack(bytes);
+			const files = await unpackPluginArchive(bytes);
 			const manifestFile = files.find((file) => file.name === 'manifest.json');
 			if (!manifestFile) error('Plugin ZIP requires manifest.json at its root.');
 			if (manifestFile.data.length > 64_000) error('Plugin manifest exceeds 64 KiB.');

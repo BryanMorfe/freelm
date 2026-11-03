@@ -1,4 +1,10 @@
+import WelcomeOnboarding from './components/WelcomeOnboarding';
+import { onboardingSeen, finishOnboarding, isUnconfiguredWorkspace } from './lib/onboarding-preferences';
+import { playBotResponseSound } from './lib/bot-response-sound';
+import { notificationWorkspace } from './lib/notification-navigation';
+import type { NotificationDestination } from './notification-types';
 import { userFacingError } from './lib/user-facing-error';
+import { ChatSteeringInbox } from './lib/chat-steering';
 import { useWorkflowsWorkspace } from './components/WorkflowsFeature';
 import { useProjectWorkflows } from './lib/use-project-workflows';
 import CodeWorkspacePanel, { CodeWorkspaceResize } from './components/CodeWorkspacePanel';
@@ -155,6 +161,7 @@ import {
 } from './lib/catalog';
 import Sidebar from './components/Sidebar';
 import PluginWorkspace from './components/PluginWorkspace';
+import PluginSettings from './components/PluginSettings';
 import { usePluginTabs } from './components/usePluginTabs';
 import { usePluginSurfaceHost } from './components/usePluginSurfaceHost';
 import WorkspaceTitlebar from './components/WorkspaceTitlebar';
@@ -197,6 +204,14 @@ export default function App() {
 		[],
 	);
 	const [loaded, setLoaded] = useState(false);
+ const [welcomeOpen, setWelcomeOpen] = useState(false);
+ const welcomeChecked = useRef(false);
+ useEffect(() => {
+  if (!loaded || welcomeChecked.current) return;
+  welcomeChecked.current = true;
+  if (!onboardingSeen() && isUnconfiguredWorkspace(state)) setWelcomeOpen(true);
+ }, [loaded, state]);
+
 	const [fatal, setFatal] = useState('');
 	const [storageError, setStorageError] = useState('');
 	const [storageInfo, setStorageInfo] = useState<{
@@ -219,6 +234,7 @@ export default function App() {
 	const [reloadConfirm, setReloadConfirm] = useState(false);
 	const [reloadTargetId, setReloadTargetId] = useState('local');
 	const [workspaceError, setWorkspaceError] = useState('');
+	const [notificationError, setNotificationError] = useState('');
 	const [backupLocation, setBackupLocation] = useState('');
 	const [mode, setMode] = useState<WorkspaceMode>(initialNavigation.mode);
 	const pluginTabs = usePluginTabs(loaded && workspaceId === 'local' && !switching);
@@ -240,6 +256,11 @@ export default function App() {
 	const projectWorkflows = useProjectWorkflows(loaded && workspaceId === 'local' && !switching);
 	const botsWorkspace = useBotsWorkspace(
 		loaded && mode === 'bots' && !settings && !pluginTabs.active,
+		{
+			dictation: state.dictation,
+			dictationConnection: state.connections.find((item) => item.id === state.dictation?.connectionId),
+			onDictationSettings: () => openSettings('chat'),
+		},
 	);
 	const workflowsWorkspace = useWorkflowsWorkspace(
 		loaded && mode === 'workflows' && !settings && !pluginTabs.active,
@@ -263,6 +284,7 @@ export default function App() {
 	const [codeDraftScope, setCodeDraftScope] = useState('new:code:general');
 	const afterSettings = useRef<(() => void) | null>(null);
 	const [sidebar, setSidebar] = useState(() => window.innerWidth > 700);
+	const [pluginSidebar, setPluginSidebar] = useState<HTMLDivElement | null>(null);
 	const computerSessions = useComputerSessions();
 	const [pinnedSummaryVisible, setPinnedSummaryVisible] = useState(() => {
 		try {
@@ -290,6 +312,7 @@ export default function App() {
 	const [runningThreads, setRunningThreads] = useState<ReadonlySet<string>>(() => new Set());
 	const runningThread = threadId && runningThreads.has(threadId) ? threadId : null;
 	const controllers = useRef(new Map<string, AbortController>());
+	const chatInputs = useRef(new Map<string, ChatSteeringInbox>());
 	// The queue ref is read at model/tool boundaries before React has to paint it.
 	const codeQueues = useRef(new Map<string, QueuedCodeMessage[]>());
 	const pendingQueueWrites = useRef(new Set<string>());
@@ -837,6 +860,78 @@ export default function App() {
 			}),
 		[loaded, workspaceId, botsWorkspace.flushDrafts, workflowsWorkspace.flushDrafts],
 	);
+	const performNotificationRoute = useRef<(destination: NotificationDestination) => Promise<void>>(
+		async () => {},
+	);
+	performNotificationRoute.current = async (destination) => {
+		if (!window.desktop || transitioning.current)
+			throw new Error(
+				'Wait for the workspace to finish opening, then open the notification again.',
+			);
+		const target = notificationWorkspace(destination, await window.desktop.instanceStatus());
+		await botsWorkspace.flushDrafts();
+		await workflowsWorkspace.flushDrafts();
+		if (workspaceRef.current !== target) await switchWorkspace(target);
+		if (destination.kind === 'thread') {
+			if (!stateRef.current.threads.some((t) => t.id === destination.entityId))
+				throw new Error('This conversation is no longer available.');
+			selectThread(destination.entityId);
+		} else if (destination.kind === 'bot') {
+			await botsWorkspace.openNotification(target, destination.entityId);
+			setMode('bots');
+		} else {
+			await workflowsWorkspace.openNotification(destination.runId);
+			setMode('workflows');
+		}
+		pluginTabs.setActiveKey(null);
+		setSettings(false);
+		setNotificationError('');
+	};
+	const notificationRoute = useRef<(destination: NotificationDestination) => Promise<void>>(
+		async () => {},
+	);
+	notificationRoute.current = async (destination) => {
+		if (settings) {
+			leaveSettings(() => {
+				void performNotificationRoute
+					.current(destination)
+					.catch((error) => setNotificationError(userFacingError(error)));
+			});
+			return;
+		}
+		await performNotificationRoute.current(destination);
+	};
+	useEffect(() => {
+		if (!loaded) return;
+		let mounted = true;
+		let queue = Promise.resolve();
+		const open = (destination: NotificationDestination) => {
+			queue = queue
+				.then(async () => {
+					if (mounted) await notificationRoute.current(destination);
+				})
+				.catch((error) => {
+					if (mounted) setNotificationError(userFacingError(error));
+				});
+		};
+		const remove = window.desktop?.onNotificationOpen?.(open);
+		void window.desktop
+			?.notificationReady?.()
+			.then((destination) => {
+				if (destination && mounted) open(destination);
+			})
+			.catch(() => {});
+		const removeSound = window.desktop?.onBotResponseSound?.((volume, kind) => {
+			// Drop a stale cue after an app switch; never reroute or replay it.
+			if ((kind === 'message') !== (document.hasFocus() && document.visibilityState === 'visible')) return;
+			void playBotResponseSound(volume, kind).catch(() => {});
+		});
+		return () => {
+			mounted = false;
+			remove?.();
+			removeSound?.();
+		};
+	}, [loaded]);
 	useEffect(() =>
 		window.desktop?.onOpenThread?.((id) => {
 			if (stateRef.current.threads.some((item) => item.id === id)) {
@@ -1253,12 +1348,13 @@ export default function App() {
 		setThreadId(id);
 		setProjectId(t.projectId || null);
 		setModel(t.model);
-		const nextConnection = state.connections.find((c) => c.id === t.connectionId) || connection;
+		const nextConnection =
+			stateRef.current.connections.find((c) => c.id === t.connectionId) || connection;
 		setThinkingMode(t.thinkingMode || defaultThinkingMode(nextConnection, t.model) || '');
-		const kind = threadKind(t, state.projects);
+		const kind = threadKind(t, stateRef.current.projects);
 		setMode(kind);
 		setActiveConversationKind(kind);
-		if (state.connections.some((c) => c.id === t.connectionId))
+		if (stateRef.current.connections.some((c) => c.id === t.connectionId))
 			setState((s) => ({ ...s, activeConnectionId: t.connectionId }));
 		setDialog(null);
 	}
@@ -1269,6 +1365,26 @@ export default function App() {
 		continuationEpochs.current.set(id, (continuationEpochs.current.get(id) ?? 0) + 1);
 		controllers.current.get(id)?.abort();
 		if (workspaceRef.current === 'local') void window.desktop?.hostTaskStop?.(id).catch(() => {});
+	}
+	function steerChat(content: string, attachments: Attachment[], replyTo?: ReplyReference) {
+		const target = stateRef.current.threads.find((item) => item.id === threadId);
+		const inbox = target && chatInputs.current.get(target.id);
+		if (!target || !inbox || controllers.current.get(target.id)?.signal.aborted)
+			throw new Error('This response is finishing. Send your message again when it stops.');
+		const message: Message = { id: crypto.randomUUID(), role: 'user', content, attachments,
+			replyTo, createdAt: Date.now(), parentId: target.messages.at(-1)?.id ?? null };
+		const snapshot = { ...stateRef.current, threads: stateRef.current.threads.map(item =>
+			item.id === target.id ? { ...item, messages: [...item.messages, message], updatedAt: message.createdAt } : item) };
+		stateRef.current = snapshot;
+		setState(snapshot);
+		const workspace = workspaceRef.current;
+		const saved = saveQueue.current.catch(() => {}).then(() => saveState(
+			workspaceRef.current === workspace ? stateRef.current : snapshot, workspace));
+		saveQueue.current = saved;
+		inbox.ready = saved;
+		inbox.push(message);
+		// The message is already in history. A persistence failure must not duplicate it in the draft.
+		void saved.catch(error => setStorageError(`Changes could not be saved: ${String(error)}`));
 	}
 	function taskStatus(id: string): CodeTaskStatus {
 		const hosted =
@@ -1798,6 +1914,8 @@ export default function App() {
 			}
 		}
 		controllers.current.set(id, ctl);
+		const chatInput = kind === 'chat' ? new ChatSteeringInbox() : undefined;
+		if (chatInput) chatInputs.current.set(id, chatInput);
 		let pending: Message = {
 			id: assistantId,
 			role: 'assistant',
@@ -2049,6 +2167,7 @@ export default function App() {
 						),
 						thinkingMode: requestThinkingMode,
 						signal: ctl.signal,
+						inputSignal: chatInput?.signal,
 						instructions: prompt.text,
 						context: prompt.context,
 						tools: segmentTools,
@@ -2061,7 +2180,7 @@ export default function App() {
 											codeQueue(id).length > 0) ||
 											stateRef.current.threads.find((item) => item.id === id)?.goal?.status ===
 												'budget_limited')
-								: undefined,
+								: chatInput ? () => chatInput.pending : undefined,
 						onRequest: (request) =>
 							rememberPrompt(request.instructions, request.tools, prompt.tools, request.context),
 						execute: async (name, args, callId): Promise<ToolResult> => {
@@ -2253,9 +2372,37 @@ export default function App() {
 						},
 					});
 					updates.flush();
-					if (!result.yieldedForInput) break;
+					if (!result.yieldedForInput) {
+						if (chatInput) chatInputs.current.delete(id);
+						break;
+					}
 					if (ctl.signal.aborted || workspaceRef.current !== requestWorkspace)
 						throw new DOMException('Cancelled', 'AbortError');
+					if (chatInput) {
+						for (;;) {
+							const ready = chatInput.ready;
+							await ready;
+							if (ready === chatInput.ready) break;
+						}
+						if (ctl.signal.aborted || workspaceRef.current !== requestWorkspace)
+							throw new DOMException('Cancelled', 'AbortError');
+						const incoming = chatInput.take();
+						base = [...base, { ...pending, ...live, completedAt: Date.now() }];
+						for (const message of incoming) {
+							base.push({ ...message, parentId: base.at(-1)?.id ?? null });
+							recentImages.push(...(message.attachments ?? []).filter(a => a.type.startsWith('image/')));
+						}
+						assistantId = crypto.randomUUID();
+						pending = { ...pending, id: assistantId, parentId: base.at(-1)?.id ?? null, createdAt: Date.now() };
+						live = { phase: 'working' };
+						output = '';
+						usedTools = false;
+						updateThread(id, item => selectConversationPath(item, assistantId, [...base, pending]));
+						prompt = buildSystemPrompt({ state: stateRef.current, kind, thread: { ...next, messages: base },
+							catalog, memorySupported: memorySupported && !isTemporary });
+						segmentTools = [...new Map([...segmentTools, ...(result.continuationTools ?? [])].map(tool => [tool.name, tool])).values()];
+						continue;
+					}
 					await codeStateWrites.current;
 					if (ctl.signal.aborted) throw new DOMException('Cancelled', 'AbortError');
 					const selectedState = stateRef.current;
@@ -2403,6 +2550,7 @@ export default function App() {
 			});
 		} finally {
 			updates.flush();
+			if (chatInputs.current.get(id) === chatInput) chatInputs.current.delete(id);
 			if (kind === 'code' && workspaceRef.current === requestWorkspace)
 				updateThread(id, (item) => {
 					if (!item.goal) return item;
@@ -2527,6 +2675,8 @@ export default function App() {
 			void window.desktop
 				?.notifyCompletion?.({
 					threadId: id,
+					workspaceId: requestWorkspace,
+					runId: assistantId,
 					title: isTemporary
 						? 'Temporary chat'
 						: (stateRef.current.threads.find((item) => item.id === id)?.title ?? next.title),
@@ -2544,6 +2694,7 @@ export default function App() {
 			const titleCtl = new AbortController();
 			titleControllers.current.set(id, titleCtl);
 			void generateThreadTitle({
+				providerCaller: kind,
 				connection: segmentConnection,
 				model: segmentModel,
 				question: composerVisibleText(base.find((m) => m.role === 'user')?.content || content),
@@ -2754,21 +2905,25 @@ export default function App() {
 					title={
 						settings
 							? 'Settings'
-							: pluginTabs.active
-								? pluginTabs.active.tab.title
-								: mode === 'chat' || mode === 'code'
-									? temporaryChat || thread?.temporary
-										? 'Temporary chat'
-										: thread?.title || project?.name || (mode === 'code' ? 'New task' : 'New chat')
-									: mode === 'images'
-										? 'Images'
-										: mode === 'videos'
-											? 'Video'
-											: mode === 'bots'
-												? botsWorkspace.title
-												: mode === 'workflows'
-													? workflowsWorkspace.title
-													: 'Audio'
+							: mode === 'plugins' && !pluginTabs.active
+								? 'Plugins'
+								: pluginTabs.active
+									? pluginTabs.active.tab.title
+									: mode === 'chat' || mode === 'code'
+										? temporaryChat || thread?.temporary
+											? 'Temporary chat'
+											: thread?.title ||
+												project?.name ||
+												(mode === 'code' ? 'New task' : 'New chat')
+										: mode === 'images'
+											? 'Images'
+											: mode === 'videos'
+												? 'Video'
+												: mode === 'bots'
+													? botsWorkspace.title
+													: mode === 'workflows'
+														? workflowsWorkspace.title
+														: 'Audio'
 					}
 					thread={!pluginTabs.active && (mode === 'chat' || mode === 'code') ? thread : undefined}
 					projectName={
@@ -2824,8 +2979,17 @@ export default function App() {
 										<span>{choice.plugin.manifest.name}</span>
 									</button>
 								))}
-								<button onClick={() => openSettings('plugins')}>Manage plugins</button>
+								<button onClick={() => leaveSettings(() => selectMode('plugins'))}>
+									Manage plugins
+								</button>
 							</div>
+						) : mode === 'plugins' ? (
+							<div
+								className="sidebar-panel"
+								role="region"
+								aria-label="Plugin navigation"
+								ref={setPluginSidebar}
+							/>
 						) : mode === 'bots' ? (
 							botsWorkspace.panel
 						) : mode === 'workflows' && !workflowProjectId ? (
@@ -2940,6 +3104,12 @@ export default function App() {
 						</button>
 					</div>
 				)}
+				{notificationError && (
+					<div className="storage-error" role="alert">
+						<span>{notificationError}</span>
+						<button onClick={() => setNotificationError('')}>Dismiss notification error</button>
+					</div>
+				)}
 				{(storageError || workspaceError) && (
 					<div className="storage-error" role="alert">
 						{userFacingError(storageError || workspaceError)}
@@ -2981,7 +3151,16 @@ export default function App() {
 						key={pluginTabs.active.key}
 						choice={pluginTabs.active}
 						accounts={pluginTabs.accounts}
-						onSettings={() => openSettings('plugins')}
+						onSettings={() => selectMode('plugins')}
+					/>
+				) : mode === 'plugins' ? (
+					<PluginSettings
+						sidebarContainer={pluginSidebar}
+						storefront
+						readOnly={workspaceId !== 'local'}
+						workspaceName={workspaceName}
+						connections={state.connections}
+						workspaceId={workspaceId}
 					/>
 				) : mode === 'bots' ? (
 					botsWorkspace.content
@@ -3025,6 +3204,7 @@ export default function App() {
 								onThinkingMode={selectThinkingMode}
 								busy={!!runningThread || switching || !!storageError || settings}
 								runningHere={!!threadId && runningThread === threadId}
+								canSteer={activeConversationKind === 'chat' && !!threadId && chatInputs.current.has(threadId) && !switching && !storageError && !settings}
 								canQueue={
 									activeConversationKind === 'code' &&
 									!!runningThread &&
@@ -3122,6 +3302,8 @@ export default function App() {
 										activeConversationKind === 'code'
 									)
 										enqueueCodeMessage(content, attachments, replyTo, composer);
+									else if (threadId && controllers.current.has(threadId) && activeConversationKind === 'chat')
+										steerChat(content, attachments, replyTo);
 									else void runChat(content, attachments, undefined, replyTo, composer);
 								}}
 								onStop={() => {
@@ -3179,6 +3361,7 @@ export default function App() {
 								}}
 								onToolsSettings={() => openSettings('tools')}
 								onSettings={() => openSettings()}
+								onSetupConnection={() => openSettings('connections')}
 								projects={state.projects}
 								onEditProject={openProject}
 								onNewProject={() => openProject()}
@@ -3364,8 +3547,10 @@ export default function App() {
 			)}
 			{settings && (
 				<Settings
+     onWelcome={workspaceId === 'local' ? () => leaveSettings(() => setWelcomeOpen(true)) : undefined}
 					key={workspaceId}
 					initialSection={settingsSection}
+					onOpenPlugins={() => leaveSettings(() => selectMode('plugins'))}
 					sectionRequest={settingsSectionRequest}
 					onExitCancel={() => {
 						afterSettings.current = null;
@@ -3481,6 +3666,28 @@ export default function App() {
 					}}
 				/>
 			)}
+
+   <WelcomeOnboarding open={welcomeOpen && workspaceId === 'local'}
+    secureStorage={storageInfo.secure} secureStorageChecked={storageInfo.checked}
+    thinkingPresets={state.thinkingPresets}
+    onClose={() => {finishOnboarding(); setWelcomeOpen(false);}}
+    onSave={async (draft) => {
+     if (workspaceRef.current !== 'local') throw new Error('Return to this computer to finish setup.');
+     await saveQueue.current.catch(() => {});
+     if (workspaceRef.current !== 'local') throw new Error('Return to this computer to finish setup.');
+     const withConnection = (current: AppState): AppState => ({
+      ...current,
+      connections: isUnconfiguredWorkspace(current) ? [draft] : [...current.connections.filter(c => c.id !== draft.id), draft],
+      activeConnectionId: draft.id,
+     });
+     await saveState(withConnection(stateRef.current), 'local');
+     // Background task updates may arrive while storage is saving. Keep their state.
+     if (workspaceRef.current !== 'local') return;
+     const next = withConnection(stateRef.current);
+     stateRef.current = next;
+     setState(next);
+     selectModel(defaultModel(draft, 'chat'), draft);
+    }} />
 			{dialog && (
 				<div className="modal-backdrop" onClick={closeDialog}>
 					<section

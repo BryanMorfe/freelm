@@ -13,35 +13,8 @@
 .bots-sidebar {
 	min-height: 0;
 }
-.bots-sidebar .sidebar-panel-header {
-	flex-shrink: 0;
-}
-.bots-sidebar .sidebar-panel-header h2 {
-	margin: 0;
-	font-size: 18px;
-	font-weight: 600;
-	flex: 1;
-}
-.bots-sidebar .sidebar-panel-header .icon-button {
-	width: 28px;
-	height: 28px;
-}
 .bots-search {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	margin: 3px 12px 16px;
-	padding: 7px 9px;
-	border-radius: 9px;
-	background: var(--hover);
-	color: var(--muted);
-}
-.bots-search input {
-	width: 100%;
-	border: 0;
-	background: none;
-	padding: 0;
-	font-size: var(--font-size-ui);
+	margin: 0 var(--space-3) var(--space-3);
 }
 .bots-sidebar .sidebar-scroll {
 	padding-top: 0;
@@ -303,13 +276,6 @@
 :root[data-theme='light'] .bot-message-row.own .bot-message-bubble {
 	background: #1672e8;
 }
-.bot-message-row:not(.consecutive) .bot-message-bubble {
-	border-bottom-left-radius: 6px;
-}
-.bot-message-row.own:not(.consecutive) .bot-message-bubble {
-	border-bottom-left-radius: 19px;
-	border-bottom-right-radius: 6px;
-}
 .bot-message-bubble .message-content {
 	min-width: 0;
 	font-size: inherit;
@@ -530,34 +496,58 @@
 	flex-shrink: 0;
 }
 .bots-composer {
+	--bots-composer-control-size: 32px;
 	display: flex;
 	align-items: flex-end;
 	gap: 8px;
-	border: 1px solid color-mix(in srgb, var(--text) 17%, transparent);
+	border: 1px solid var(--border);
 	border-radius: 24px;
-	padding: 7px 8px 7px 17px;
+	padding: 7px;
 	background: color-mix(in srgb, var(--input) 45%, transparent);
+}
+/* The composer is one input surface. Keep focus off the inner text rectangle. */
+.bots-composer[data-keyboard-focus='true']:has(textarea:focus-visible) {
+	border-color: var(--muted);
+}
+.bots-composer textarea:focus-visible {
+	outline: none;
+}
+.bots-composer button:focus-visible {
+	outline-color: var(--muted);
+	outline-offset: 2px;
 }
 .bots-composer textarea {
 	flex: 1;
 	align-self: center;
 	border: 0;
 	border-radius: 0;
-	padding: 2px 0;
+	padding: 5px 0;
 	margin: 0;
 	font-size: 14px;
 	line-height: 1.5;
-	min-height: 24px;
+	min-height: var(--bots-composer-control-size);
 	max-height: 600px;
 	resize: none;
 	background: transparent;
 	field-sizing: content;
 	overflow-y: auto;
 }
-.bots-composer .bots-send {
-	width: 28px;
-	height: 28px;
+.bots-composer .bots-attach,
+.bots-composer .bots-send,
+.bots-composer .dictation-button {
+	width: var(--bots-composer-control-size);
+	height: var(--bots-composer-control-size);
 	border-radius: 50%;
+	margin: 0;
+	padding: 0;
+}
+.bots-composer .bots-attach {
+	background: var(--hover);
+}
+.bots-composer .bots-attach:hover:not(:disabled) {
+	background: var(--border);
+}
+.bots-composer .bots-send {
 	flex-shrink: 0;
 	display: flex;
 	align-items: center;
@@ -570,6 +560,12 @@
 	background: var(--hover);
 	color: var(--muted);
 	opacity: 1;
+}
+@media (pointer: coarse) {
+	.bots-composer {
+		--bots-composer-control-size: 44px;
+		border-radius: 30px;
+	}
 }
 .bots-reply-banner {
 	display: flex;
@@ -939,9 +935,6 @@
 .bot-disabled .bot-inbox-line strong {
 	color: var(--muted);
 }
-.bots-search {
-	flex-direction: row;
-}
 .bots-dialog .settings-row-inline {
 	display: flex;
 	flex-direction: row;
@@ -1056,4 +1049,57 @@
 .bots-edit-message > .bots-mention-input {
 	display: block;
 	margin-top: 0;
+}
+
+.bots-attachment-previews {
+	display: flex;
+	gap: 8px;
+	overflow-x: auto;
+	padding: 8px 0;
+}
+.bots-attachment-preview {
+	position: relative;
+	flex: 0 0 160px;
+	padding: 8px;
+	border: 1px solid var(--border);
+	border-radius: 14px;
+}
+.bots-attachment-preview > button {
+	position: absolute;
+	right: 4px;
+	top: 4px;
+	background: var(--input);
+}
+.bots-message-attachments {
+	display: grid;
+	gap: 8px;
+	min-width: 0;
+}
+.bots-message-attachments:empty {
+	display: none;
+}
+.bots-media-attachment {
+	display: grid;
+	gap: 4px;
+	min-width: 0;
+}
+.bots-media-attachment img,
+.bots-media-attachment video {
+	display: block;
+	max-width: 100%;
+	max-height: 320px;
+	border-radius: 10px;
+	object-fit: contain;
+}
+.bots-media-attachment audio {
+	max-width: 100%;
+	width: 280px;
+}
+.bots-media-attachment a {
+	font-size: var(--font-size-ui);
+	overflow-wrap: anywhere;
+}
+.bots-attachment-preview img,
+.bots-attachment-preview video {
+	height: 90px;
 }

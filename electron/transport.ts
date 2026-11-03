@@ -82,6 +82,7 @@ export async function performRequest(
 	onChunk: (text: string) => void,
 	signal?: AbortSignal,
 ): Promise<WireResponse> {
+	if (request.providerAdapterRequired) throw new Error('This execution path does not support provider adapters.');
 	const url = apiUrl(request.baseUrl, request.path);
 	if (!['GET', 'POST'].includes(request.method)) throw new Error('Unsupported HTTP method.');
 	const headers: Record<string, string> = {};

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { BotHost, type BotHostOptions } from '../../electron/bot-host';
@@ -91,6 +91,83 @@ async function fixture(options: Partial<BotHostOptions>) {
 }
 const rows = (wire: WireRequest) => wire.body!.input as Record<string, unknown>[];
 describe('durable and responsive bot execution', () => {
+	it('persists intermediate messages in order and retains the normal final summary', async () => {
+		let requests = 0;
+		let release!: () => void;
+		const gate = new Promise<void>((resolve) => (release = resolve));
+		const { host, config } = await fixture({
+			request: async () => {
+				requests++;
+				if (requests === 1)
+					return response('', [['bot_send_message', { text: 'I’ll check the request.' }]]);
+				if (requests === 2) {
+					await gate;
+					return response('', [['bot_send_message', { text: 'The check found a missing input.' }]]);
+				}
+				return response('Checked the request. Please provide the missing input to continue.');
+			},
+		});
+		await send(host, 'request', 'Check this request');
+		await vi.waitFor(() => expect(requests).toBe(2));
+		try {
+			const saved = JSON.parse(await readFile(config.filename, 'utf8'));
+			expect(
+				saved.conversations[0].messages
+					.filter(
+						(m: { role: string; status: string }) => m.role === 'bot' && m.status === 'completed',
+					)
+					.map((m: { content: string }) => m.content),
+			).toEqual(['I’ll check the request.']);
+		} finally {
+			release();
+		}
+		await host.idle();
+		const expected = [
+			'I’ll check the request.',
+			'The check found a missing input.',
+			'Checked the request. Please provide the missing input to continue.',
+		];
+		const messages = (await host.snapshot()).conversations[0].messages.filter(
+			(m) => m.role === 'bot',
+		);
+		expect(messages.map((m) => m.content)).toEqual(expected);
+		expect(messages.every((m) => m.status === 'completed')).toBe(true);
+		expect(new Set(messages.map((m) => m.id)).size).toBe(3);
+		await send(host, 'request', 'Check this request');
+		await host.idle();
+		expect(
+			(await host.snapshot()).conversations[0].messages
+				.filter((m) => m.role === 'bot')
+				.map((m) => m.content),
+		).toEqual(expected);
+		host.close();
+		const reopened = new BotHost(config);
+		hosts.push(reopened);
+		expect(
+			(await reopened.snapshot()).conversations[0].messages
+				.filter((m) => m.role === 'bot')
+				.map((m) => m.content),
+		).toEqual(expected);
+	});
+
+	it('retains delivered progress when later inference fails', async () => {
+		let requests = 0;
+		const { host } = await fixture({
+			request: async () => {
+				if (++requests === 1) return response('', [['bot_send_message', { text: 'I’ll check.' }]]);
+				throw new Error('Synthetic provider unavailable');
+			},
+		});
+		await send(host, 'request', 'Check');
+		await host.idle();
+		const messages = (await host.snapshot()).conversations[0].messages.filter(
+			(m) => m.role === 'bot',
+		);
+		expect(messages).toHaveLength(2);
+		expect(messages[0]).toMatchObject({ content: 'I’ll check.', status: 'completed' });
+		expect(messages[1]).toMatchObject({ status: 'failed' });
+		expect(messages[1].activity).toBeUndefined();
+	});
 	it('delivers a text before work, keeps long tools async, and wakes on completion', async () => {
 		let release!: () => void;
 		const wait = new Promise<void>((resolve) => (release = resolve));
@@ -286,4 +363,36 @@ describe('durable and responsive bot execution', () => {
 				.map((m) => m.content),
 		).toEqual(['Using the new name.']);
 	});
+});
+
+describe('attachment delivery authorization', () => {
+ const file = {name:'clip.mp4',type:'video/mp4',dataUrl:'data:video/mp4;base64,eA=='};
+ it('delivers attachment-only replies durably and deduplicates user retries', async () => {
+  let count=0;
+  const {host,config}=await fixture({request:async()=> ++count===1 ? response('',[['bot_send_message',{text:'',attachmentRefs:['bot-attachment:attached:0']}]]) : response('Delivered.')});
+  const command={type:'send' as const,conversationId:'dm',messageId:'attached',content:'',attachments:[file]};
+  await host.command(command); await host.idle();
+  await host.command(command); await host.idle();
+  const messages=(await host.snapshot()).conversations[0].messages;
+  expect(messages.filter(m=>m.role==='user')).toHaveLength(1);
+  expect(messages.filter(m=>m.role==='bot' && m.attachments?.length)).toHaveLength(1);
+  expect(JSON.parse(await readFile(config.filename,'utf8')).conversations[0].messages.some((m: {attachments?: unknown[]})=>m.attachments?.length)).toBe(true);
+  await expect(host.command({...command,attachments:[{...file,name:'changed'}]})).rejects.toThrow('different content');
+ });
+ it.each(['bot-attachment:other-conversation:0','../../secret','file:///tmp/secret','https://example.com/file'])('rejects unavailable or path/URL ref %s', async ref=>{
+  let count=0;
+  const {host}=await fixture({request:async()=>++count===1 ? response('',[['bot_send_message',{text:'File',attachmentRefs:[ref]}]]) : response('Unavailable.')});
+  await send(host,'request','Send file'); await host.idle();
+  expect((await host.snapshot()).conversations[0].messages.some(m=>m.attachments?.length)).toBe(false);
+ });
+ it.each(['allowed','denied','revoked','remote'])('gates generated workspace artifacts with current thread access %s', async mode=>{
+  let count=0;
+  let permitted = mode !== 'denied';
+  const {host,config}=await fixture({taskToolDefinitions:async()=> permitted ? [{name:'threads_read',description:'Read',parameters:schema}] : [],request:async()=>{ if (mode === 'revoked') permitted=false; return ++count===1 ? response('',[['bot_send_message',{text:'Generated file',attachmentRefs:['thread-asset:'+encodeURIComponent(JSON.stringify(['home','task','generated',null,0]))]}]]) : response('Finished.'); }});
+  const state=await config.workspace();
+  state!.threads.push({id:'task',temporary:false,messages:[{id:'generated',role:'assistant',content:'',attachments:[file]}]} as never);
+  await host.command({type:'update-bot',botId:'nova',changes:{historyAccess:true}});
+  await host.command({type:'send',conversationId:'dm',messageId:'request',content:'Send generated file'},mode === 'remote'); await host.idle();
+  expect((await host.snapshot()).conversations[0].messages.some(m=>m.attachments?.length)).toBe(mode === 'allowed');
+ });
 });

@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import { initialState } from '../../src/lib/state';
@@ -787,6 +787,7 @@ test('recovers rejected project edits and runs, then approves an agent-created p
 	};
 	await page.getByLabel('Workflow name', { exact: true }).fill('Unsaved local change');
 	await expect(page.getByRole('alert')).toContainText('changed');
+  await expect(page.getByText(/Unsaved changes ·/)).toBeVisible();
 	await expect(page.getByLabel('Workflow name', { exact: true })).toHaveValue(
 		'Unsaved local change',
 	);
@@ -825,3 +826,31 @@ test('recovers rejected project edits and runs, then approves an agent-created p
 		.click();
 	await expect(page.getByRole('heading', { name: 'Run completed', exact: true })).toBeVisible();
 });
+
+for (const recovery of ['copy', 'discard'] as const) {
+ test(`preserves a stale library draft through explicit refresh and ${recovery} recovery`, async ({ page }, info) => {
+  const engine = await fixture(page);
+  await page.getByRole('button', { name: 'New workflow', exact: true }).first().click();
+  await expect(page.getByLabel('Workflow name', { exact: true })).toBeVisible();
+  const original = engine.listWorkflows()[0];
+  const external = { ...original, name: 'External library version', revision: 5 };
+  await writeFile(path.join(engine.store.directory, 'definitions', `${original.id}.json`), JSON.stringify(external));
+  await page.getByLabel('Workflow name', { exact: true }).fill('My unsaved draft');
+  await expect(page.getByRole('alert')).toContainText('changed');
+  await expect(page.getByText(/Unsaved changes ·/)).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh definitions from disk', exact: true }).click();
+  await expect.poll(() => engine.getWorkflow(original.id)?.revision).toBe(5);
+  await expect(page.getByLabel('Workflow name', { exact: true })).toHaveValue('My unsaved draft');
+  await page.screenshot({ path: info.outputPath(`conflict-${recovery}.png`) });
+  if (recovery === 'copy') {
+   await page.getByRole('button', { name: 'Keep draft as copy', exact: true }).click();
+   await expect(page.getByLabel('Workflow name', { exact: true })).toHaveValue('My unsaved draft copy');
+   expect(engine.listWorkflows().find(graph => graph.id !== original.id)).toMatchObject({ enabled: false, revision: 1 });
+  } else {
+   await page.getByRole('button', { name: 'Discard draft and reload', exact: true }).click();
+   await expect(page.getByLabel('Workflow name', { exact: true })).toHaveValue('External library version');
+  }
+  expect(engine.getWorkflow(original.id)).toEqual(external);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+ });
+}

@@ -153,7 +153,17 @@ test('sidebar actions appear on hover or keyboard focus and highlights span comp
 	const actions = page.getByRole('button', { name: 'Actions for Inspect the parser', exact: true });
 	await expect(project).toHaveClass(/active/);
 	await expect(plus).toHaveCSS('opacity', '0');
-	await expect(plus).toHaveCSS('pointer-events', 'none');
+	await expect(plus).toHaveCSS('pointer-events', 'auto');
+	// Direct activation must not require a prior hover; otherwise the row intercepts it.
+	expect(await plus.evaluate((button) => {
+		const box = button.getBoundingClientRect();
+		return button.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2));
+	})).toBe(true);
+	await plus.click();
+	await expect(page.getByRole('menu', {name: 'Add to Repository', exact: true})).toBeVisible();
+	await page.keyboard.press('Escape');
+	await page.getByRole('button', { name: 'Home', exact: true }).focus();
+	await page.mouse.move(500, 60);
 	await project.hover();
 	await expect(plus).toHaveCSS('opacity', '1');
 	await page.getByRole('button', { name: 'Home', exact: true }).focus();

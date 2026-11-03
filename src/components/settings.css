@@ -193,7 +193,8 @@ body:has(.settings-page) .select-popup > button {
 	padding: 5px 10px;
 	line-height: 18px;
 }
-.settings-page input:not([type='checkbox']):not([type='radio']):not([type='color']),
+.settings-page
+	input:not([type='checkbox']):not([type='radio']):not([type='color']):not([type='search']),
 .settings-page select {
 	height: 30px;
 	min-height: 30px;

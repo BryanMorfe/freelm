@@ -349,21 +349,22 @@ describe('project-scoped Code workflow tools', () => {
 		await expect(call('validate', { graph: definition })).rejects.toThrow('host-owned');
 	});
 	it('keeps Plan reads available while rejecting create/update/run/cancel', () => {
-		for (const name of ['list', 'catalog', 'inspect', 'validate', 'read_run'])
+		for (const name of ['list', 'catalog', 'inspect', 'library_inspect', 'validate', 'read_run'])
 			expect(codePlanToolDenial(`workflows.${name}`, {})).toBeUndefined();
-		for (const name of ['create', 'update', 'run', 'cancel'])
+		for (const name of ['create', 'update', 'library_save', 'run', 'cancel'])
 			expect(codePlanToolDenial(`workflows.${name}`, {})).toContain('Plan mode blocked');
 	});
 });
 
 describe('Code host workflow boundary', () => {
-	async function hostFixture(kind: 'chat' | 'code' = 'code', projectId?: string) {
+	async function hostFixture(kind: 'chat' | 'code' = 'code', projectId?: string, remote = false) {
 		const state = initialState();
 		state.toolSettings = {
 			...defaultToolSettings(),
 			enabled: true,
 			skillDirectories: [],
 			commandExecution: false,
+			allowRemote: remote,
 		};
 		state.projects = [
 			{ id: 'novis', name: 'Novis', kind: 'code', directories: [], instructions: '', createdAt: 1 },
@@ -393,7 +394,7 @@ describe('Code host workflow boundary', () => {
 		const host = new AgentHost(async () => structuredClone(state), approve);
 		host.setWorkflowTools(service);
 		cleanups.push(() => host.close());
-		const catalog = await host.catalog('run', 'thread');
+		const catalog = await host.catalog('run', 'thread', remote);
 		const execute = (name: string, args = {}) =>
 			host.execute({
 				workspaceId: 'local',
@@ -411,12 +412,13 @@ describe('Code host workflow boundary', () => {
 		const { catalog } = await hostFixture(kind, project);
 		expect(catalog.tools.some((tool) => tool.name.startsWith('workflows.'))).toBe(false);
 	});
-	it('derives scope/model from saved Code state and approves writes but not reads', async () => {
+	it.each(['workflows.run', 'workflows.library_save'])('derives scope/model from saved Code state and approves %s but not reads', async (name) => {
 		const { execute, service, approve, catalog } = await hostFixture('code', 'novis');
 		expect(catalog.tools.some((tool) => tool.name === 'workflows.run')).toBe(true);
 		await execute('workflows.list');
+		await execute('workflows.library_inspect');
 		expect(approve).not.toHaveBeenCalled();
-		await execute('workflows.run');
+		await execute(name);
 		expect(approve).toHaveBeenCalledOnce();
 		expect(service.execute.mock.calls.at(-1)?.[2]).toMatchObject({
 			projectId: 'novis',
@@ -437,16 +439,23 @@ describe('Code host workflow boundary', () => {
 			createdAt: 2,
 		});
 		expect((await execute('workflows.create')).isError).toBe(true);
+		expect((await execute('workflows.library_save')).isError).toBe(true);
 		expect(service.execute).not.toHaveBeenCalled();
 		await execute('workflows.list');
 		expect(service.execute).toHaveBeenCalledOnce();
 	});
-	it('does not execute a denied workflow mutation', async () => {
+	it.each(['workflows.run', 'workflows.library_save'])('does not execute a denied %s mutation', async (name) => {
 		const { execute, service, approve } = await hostFixture('code', 'novis');
 		approve.mockResolvedValue(false);
-		const denied = await execute('workflows.run');
+		const denied = await execute(name);
 		expect(denied.isError).toBe(true);
 		expect(denied.approvalDenied).toBeDefined();
+		expect(service.execute).not.toHaveBeenCalled();
+	});
+	it('excludes shared library tools from remote Code sessions', async () => {
+		const { catalog, execute, service } = await hostFixture('code', 'novis', true);
+		expect(catalog.tools.some(tool => tool.name.startsWith('workflows.'))).toBe(false);
+		await expect(execute('workflows.library_save')).rejects.toThrow();
 		expect(service.execute).not.toHaveBeenCalled();
 	});
 	it('uses a newly changed permission mode and rejects a moved project scope', async () => {

@@ -92,5 +92,17 @@ export function userFacingError(error: unknown, fallback = DEFAULT_ERROR): strin
 		)
 	)
 		return fallback;
+	if (
+		/^(?:The response (?:was incomplete: max_output_tokens|reached the provider output limit)|The provider stopped this response: length)\.(?: Stream details: [^\n]*)?$/.test(
+			message,
+		)
+	)
+		return 'The response reached the model’s output limit. Try a shorter request or a model with a larger output limit.';
+	if (
+		/^(?:The response was incomplete: content_filter|The provider stopped this response(?: with a content filter|: content_filter))\.(?: Stream details: [^\n]*)?$/.test(
+			message,
+		)
+	)
+		return 'The provider filtered this response. Try rephrasing your request.';
 	return message;
 }

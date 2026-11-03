@@ -1,0 +1,36 @@
+{
+  "manifest": {
+    "id": "binary-remote",
+    "version": "1.0.0",
+    "title": "Binary remote pipeline",
+    "description": "Synthetic remote binary template; review real service contracts before adapting.",
+    "inputs": [],
+    "outputs": [
+      {
+        "id": "file",
+        "label": "Binary result",
+        "type": "file",
+        "required": true
+      },
+      {
+        "id": "analysis",
+        "label": "Analysis",
+        "type": "object"
+      }
+    ],
+    "fields": [
+      {
+        "key": "credential",
+        "label": "Credential reference",
+        "kind": "secret"
+      }
+    ],
+    "permissions": {
+      "network": [
+        "https://synthetic.test"
+      ]
+    },
+    "retrySafe": false
+  },
+  "source": "export default {async execute(input,ctx){const secret={secretRef:ctx.config.credential};const downloaded=await ctx.download({url:'https://synthetic.test/structure.bin',name:'structure.bin',secret});if(downloaded.status!==200)throw new Error('Download failed');const analysis=await ctx.upload({url:'https://synthetic.test/analyze',artifact:downloaded.artifact,fieldName:'structure',fields:{format:'binary'},secret,idempotencyKey:ctx.operationId});if(analysis.status!==200)throw new Error('Analysis failed');return {file:downloaded.artifact,analysis:JSON.parse(analysis.body)}}};"
+}

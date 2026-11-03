@@ -1,8 +1,8 @@
-import { AudioLines, Bot, House, Image, Settings, Video, Workflow } from 'lucide-react';
+import { AudioLines, Bot, House, Image, Puzzle, Settings, Video, Workflow } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 type NavigationDestination =
-	'home' | 'bots' | 'workflows' | 'images' | 'videos' | 'audio' | 'settings';
+	'home' | 'bots' | 'workflows' | 'images' | 'videos' | 'audio' | 'plugins' | 'settings';
 
 const outlineIcons = {
 	home: House,
@@ -12,6 +12,7 @@ const outlineIcons = {
 	videos: Video,
 	audio: AudioLines,
 	settings: Settings,
+	plugins: Puzzle,
 };
 
 // Closed silhouettes keep the interior details transparent rather than filling
@@ -54,6 +55,9 @@ const filledIcons: Record<NavigationDestination, ReactNode> = {
 			<rect x="16.6" y="5" width="2.5" height="14" rx="1.25" />
 			<rect x="20.5" y="9" width="2.5" height="6" rx="1.25" />
 		</>
+	),
+	plugins: (
+		<path d="M15.39 4.39a1 1 0 0 0 1.68-.474 2.5 2.5 0 1 1 3.014 3.015 1 1 0 0 0-.474 1.68l1.683 1.682a2.414 2.414 0 0 1 0 3.414L19.61 15.39a1 1 0 0 1-1.68-.474 2.5 2.5 0 1 0-3.014 3.015 1 1 0 0 1 .474 1.68l-1.683 1.682a2.414 2.414 0 0 1-3.414 0L8.61 19.61a1 1 0 0 0-1.68.474 2.5 2.5 0 1 1-3.014-3.015 1 1 0 0 0 .474-1.68l-1.683-1.682a2.414 2.414 0 0 1 0-3.414L4.39 8.61a1 1 0 0 1 1.68.474 2.5 2.5 0 1 0 3.014-3.015 1 1 0 0 1-.474-1.68l1.683-1.682a2.414 2.414 0 0 1 3.414 0z" />
 	),
 	settings: (
 		<path

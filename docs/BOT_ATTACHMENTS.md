@@ -1,0 +1,13 @@
+# Bots attachments
+
+Bots messages carry durable inline attachments through the existing authenticated message transport. Desktop and iOS provide a Files picker, removal before sending, attachment-only messages, media viewing and file downloads/sharing. Limits are six files, 8 MiB per file and 16 MiB per message; the existing 64 MiB serialized mailbox limit also applies. Large media libraries are outside this bounded implementation.
+
+Delivery is separate from model analysis. User raster images are supplied only when the configured model's catalog capabilities permit image input. Text and JSON use the existing text decoder with a 100,000-character cap. PDF text is extracted locally using the existing isolated PDF worker, capped at six PDFs and 100,000 extracted characters per provider projection. Original PDFs remain stored and downloadable; only extracted text reaches the configured model. Protected, malformed, scanned/image-only and truncated documents produce explicit limitations; there is no OCR or visual-layout analysis. Audio, video and other unsupported formats remain deliverable, but the model receives an explicit unavailable-analysis notice rather than their bytes. No conversion service is invoked. Extraction honors cancellation and closes its workers.
+
+Bots can send attachment references from their current conversation or stored local Chat/Code artifacts. Workspace references require current history access and an available `threads_read` permission; remote workspace forwarding is denied. References resolve against current stored state, never arbitrary filesystem paths or URLs. Chat/Code's existing narrower analysis-forwarding rules remain unchanged.
+
+Message payload validation rejects malformed data URLs, mismatched declared MIME prefixes, excessive counts and sizes. Inline display uses media allowlists; HTML and SVG are download/share-only. Attachments are never executed automatically. MIME declarations do not guarantee that a file is decodable by a platform's media codec.
+
+Retries compare attachments as well as text; execution-history hashes include attachment contents. Desktop pending selections are scoped to the active conversation and retained after send failures. iOS saves attachment drafts and retry payloads. Existing busy-send, dictation and streamed activity paths are retained.
+
+Validation uses synthetic local files and mocked providers. See attachment validator/provider tests, desktop Bots runtime tests, Bots E2E coverage, and `FreeLMBots/tests/AttachmentModelChecks.swift`. iOS builds from cached dependencies; rendered iOS interaction remains a separate validation step. Do not replace a running installed app to test this feature.

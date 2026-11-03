@@ -33,6 +33,11 @@ export default defineConfig(({ command }) => {
 		],
 		server: { host: '127.0.0.1', port: 5173, strictPort: true },
 		build: { outDir: 'dist', sourcemap: true },
-		test: { include: ['tests/**/*.test.ts'] },
+		test: {
+			include: ['tests/**/*.test.ts'],
+			// These raw stylesheets are package source, so their ZIP byte checks
+			// must not receive Vitest's default empty CSS stubs.
+			css: { include: [/examples\/plugins\/.*\.css(?:\?|$)/] },
+		},
 	};
 });

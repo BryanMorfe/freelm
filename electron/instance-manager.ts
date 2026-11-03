@@ -1,3 +1,7 @@
+import { LocalEnrollment } from './pairing/enrollment';
+import { NativePairingSecureStore } from './pairing/secure-store';
+import { LocalPairingListener } from './pairing/listener';
+import { localPairingReleaseVerified, localPairingReleaseReason } from './pairing/release-gate';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { hostname } from 'node:os';
 import path from 'node:path';
@@ -49,6 +53,10 @@ export class InstanceManager {
 	private tokens = new Map<string, string>();
 	private clients = new Map<string, InstanceClient>();
 	private host?: InstanceHost;
+    private localPairing?: LocalPairingListener;
+    private localPairingStart?: Promise<unknown>;
+    private mobileHost?: InstanceHost;
+    private mobileStartTask?: Promise<import('../src/mobile-types').MobileStatus>;
 	private bots?: BotHost;
 	private botTasks?: BotTaskService;
 	private hostState!: HostStatus;
@@ -440,6 +448,76 @@ export class InstanceManager {
 		await this.persist();
 	}
 
+    async localPairingStatus() {
+        return { available: process.platform === 'darwin' && localPairingReleaseVerified,
+            reason: localPairingReleaseReason, enabled: !!this.localPairing?.endpoint,
+            endpoint: this.localPairing?.endpoint,
+            ...(this.localPairing ? await this.localPairing.enrollment.localStatus() : {}) };
+    }
+    async startLocalPairing(options: { endpoint: string; bindAddress: string; initialize: boolean }, helper: string) {
+        if (!localPairingReleaseVerified || process.platform !== 'darwin') throw new Error(localPairingReleaseReason);
+        if (this.localPairingStart || this.localPairing || this.mobileHost || this.mobileStartTask) throw new Error('Stop existing iPhone sharing first.');
+        if (!options || typeof options.endpoint !== 'string' || options.endpoint.length > 2048 || typeof options.bindAddress !== 'string' || options.bindAddress.length > 256 || typeof options.initialize !== 'boolean') throw new Error('Invalid local pairing configuration.');
+        this.localPairingStart = (async () => {
+            await this.ready;
+            if (this.closed || !this.bots) throw new Error('Bots host is unavailable.');
+            const enrollment = new LocalEnrollment(new NativePairingSecureStore(helper));
+            // Explicit setup is distinct from resume: missing storage never silently regenerates identity.
+            if (options.initialize) await enrollment.initialize();
+            const host = new InstanceHost({ bots: this.bots, authority: this.authority, instanceId: this.saved.instanceId,
+                name: this.saved.name, token: randomBytes(32).toString('hex'), port: 0 });
+            const listener = new LocalPairingListener(enrollment, {id:this.saved.instanceId,name:this.saved.name},
+                (req,res,check) => host.handleAuthorizedMobile(req,res,check,()=>{throw new Error('Use local revocation.');}));
+            try { await listener.start(options.endpoint, options.bindAddress); this.localPairing = listener; }
+            catch(error) { await listener.stop(); throw error; }
+            return this.localPairingStatus();
+        })();
+        try { return await this.localPairingStart; } finally { this.localPairingStart=undefined; }
+    }
+    async inviteLocalPairing() { if(!this.localPairing) throw new Error('Enable local sharing first.'); return this.localPairing.invite(); }
+    async decideLocalPairing(requestId: string, keyHash: string, approve: boolean) {
+        if(!this.localPairing || !/^[a-f0-9]{64}$/.test(requestId) || !/^[a-f0-9]{64}$/.test(keyHash) || typeof approve !== 'boolean') throw new Error('Invalid approval.');
+        if(approve) await this.localPairing.enrollment.approve(requestId,keyHash);
+        else await this.localPairing.enrollment.deny(requestId);
+        return this.localPairingStatus();
+    }
+    async revokeLocalPairing() { if(!this.localPairing) throw new Error('Enable local sharing first.'); await this.localPairing.enrollment.revoke(); return this.localPairingStatus(); }
+    async stopLocalPairing() { await this.localPairingStart?.catch(()=>undefined); await this.localPairing?.stop(); this.localPairing=undefined; return this.localPairingStatus(); }
+
+    async mobileStatus() {
+        await this.ready;
+        return this.mobileHost?.mobileStatus() ?? { enabled: false, sessions: [] };
+    }
+    async startMobile(options: { endpoint: string; bindAddress: string; certPath: string; keyPath: string }) {
+        if (this.mobileStartTask || this.localPairing || this.localPairingStart) throw new Error('iPhone sharing is already starting or active.');
+        this.mobileStartTask = this.createMobile(options);
+        try { return await this.mobileStartTask; } finally { this.mobileStartTask = undefined; }
+    }
+    private async createMobile(options: { endpoint: string; bindAddress: string; certPath: string; keyPath: string }) {
+        await this.ready;
+        if (this.closed || this.mobileHost) throw new Error('Stop iPhone sharing before changing its settings.');
+        if (!options || [options.endpoint, options.bindAddress, options.certPath, options.keyPath].some(v => typeof v !== 'string' || v.length > 4096)) throw new Error('Invalid iPhone sharing configuration.');
+        const readPEM = async (filename: string) => {
+            const file = await open(filename, 'r');
+            try {
+                const stat = await file.stat();
+                if (!stat.isFile() || stat.size > 128 * 1024) throw new Error('Choose a PEM file smaller than 128 KB.');
+                return await file.readFile('utf8');
+            } finally { await file.close(); }
+        };
+        const cert = await readPEM(options.certPath), key = await readPEM(options.keyPath);
+        const host = new InstanceHost({ bots: this.bots, authority: this.authority,
+            instanceId: this.saved.instanceId, name: this.saved.name, token: randomBytes(32).toString('hex'), port: 0 });
+        try {
+            await host.startMobile({ cert, key, endpoint: options.endpoint, bindAddress: options.bindAddress });
+            this.mobileHost = host;
+            return host.mobileStatus();
+        } catch (error) { await host.stop(); throw error; }
+    }
+    async stopMobile() { await this.mobileStartTask?.catch(() => undefined); await this.mobileHost?.stop(); this.mobileHost = undefined; }
+    async inviteMobile() { if (!this.mobileHost) throw new Error('Enable secure iPhone sharing first.'); return this.mobileHost.inviteMobile(); }
+    async revokeMobile(id: string) { if (typeof id !== 'string' || id.length > 128) throw new Error('Invalid grant.'); this.mobileHost?.revokeMobile(id); }
+
 	async startHost(options: { name: string; port: number }): Promise<HostStatus> {
 		await this.ready;
 		if (this.closed) throw new Error('FreeLM is shutting down.');
@@ -493,6 +571,7 @@ export class InstanceManager {
 	}
 
 	async close() {
+        await this.stopMobile();
 		this.closed = true;
 		await this.ready;
 		for (const operation of this.connecting.values()) {
@@ -502,7 +581,8 @@ export class InstanceManager {
 		}
 		for (const client of this.clients.values()) client.disconnect();
 		this.clients.clear();
-		await this.stopHost();
+		await this.stopLocalPairing();
+        await this.stopHost();
 		await this.pending;
 	}
 

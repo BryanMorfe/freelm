@@ -7,7 +7,8 @@ import type { BotTaskRendererBridge } from './bot-task-types';
 import type { PluginBridge } from './plugin-types';
 
 export type ConversationKind = 'chat' | 'code';
-export type WorkspaceMode = ConversationKind | 'bots' | 'workflows' | 'images' | 'videos' | 'audio';
+export type WorkspaceMode =
+	ConversationKind | 'bots' | 'workflows' | 'images' | 'videos' | 'audio' | 'plugins';
 export type ModelKind = 'chat' | 'images' | 'videos' | 'speech' | 'transcription';
 export type Modality = 'text' | 'image' | 'audio' | 'video';
 export type AppearanceAccent =
@@ -19,6 +20,8 @@ export interface AppearanceSettings {
 export type JsonValue =
 	string | number | boolean | null | JsonValue[] | { [key: string]: JsonValue };
 export interface ThinkingMode {
+	/** Explicit opt-in; only empty, configured endpoint mappings send no tuning parameters. */
+	useProviderDefaults?: boolean;
 	id: string;
 	name: string;
 	parameters: { responses?: Record<string, JsonValue>; chat?: Record<string, JsonValue> };
@@ -52,6 +55,7 @@ export interface ModelDefinition {
 	defaultImagePreset?: string;
 }
 export interface Connection {
+	providerAdapter?: { pluginId: string; accountId: string; providerId: string; credentialHeader: 'authorization' | 'x-api-key' };
 	id: string;
 	name: string;
 	baseUrl: string;
@@ -211,6 +215,7 @@ export interface AppState {
 	chatDrafts?: Record<string, ChatDraft>;
 	dictation?: DictationSettings;
 	backgroundNotifications?: boolean;
+	botResponseSound?: import('./notification-types').BotResponseSound;
 	codeCompaction?: CodeCompactionSettings;
 	/** Optional media classifiers and user-selected enforcement policy. */
 	moderation?: import('./moderation-types').ModerationSettingsInput;
@@ -221,6 +226,10 @@ export interface WireFile {
 	base64: string;
 }
 export interface WireRequest {
+	/** Fail closed if the saved adapter binding is missing. */
+	providerAdapterRequired?: boolean;
+	/** Renderer requests may identify Chat or Code only; bot identity is host-owned. */
+	providerCaller?: import('./plugin-types').PluginCaller;
 	workspaceId?: string;
 	connectionId?: string;
 	id: string;
@@ -325,6 +334,17 @@ export interface DesktopBridge
 		revision: string,
 		patch: import('./workspace-patch').WorkspacePatch,
 	): Promise<{ revision: string }>;
+    localPairingStatus?(): Promise<import('./mobile-types').LocalPairingStatus>;
+    localPairingStart?(options: {endpoint:string;bindAddress:string;initialize:boolean}): Promise<import('./mobile-types').LocalPairingStatus>;
+    localPairingInvite?(): Promise<import('./mobile-types').LocalPairingInvitation>;
+    localPairingDecide?(requestId:string,keyHash:string,approve:boolean): Promise<import('./mobile-types').LocalPairingStatus>;
+    localPairingRevoke?(): Promise<import('./mobile-types').LocalPairingStatus>;
+    localPairingStop?(): Promise<import('./mobile-types').LocalPairingStatus>;
+    mobileStatus?(): Promise<import('./mobile-types').MobileStatus>;
+    mobileStart?(options: { endpoint: string; bindAddress: string }): Promise<import('./mobile-types').MobileStatus | null>;
+    mobileStop?(): Promise<void>;
+    mobileInvite?(): Promise<import('./mobile-types').MobileInvitation>;
+    mobileRevoke?(id: string): Promise<void>;
 	instanceStatus(): Promise<import('./remote-types').InstanceOverview>;
 	hostStart(options: { name: string; port: number }): Promise<import('./remote-types').HostStatus>;
 	hostStop(): Promise<void>;
@@ -342,7 +362,17 @@ export interface DesktopBridge
 		kind?: 'image' | 'video',
 	): Promise<WireResponse>;
 	workspaceBackup(state: AppState): Promise<string>;
-	notifyCompletion?(input: { threadId: string; title: string }): Promise<void>;
+	notifyCompletion?(input: {
+		threadId: string;
+		title: string;
+		workspaceId?: string;
+		runId?: string;
+	}): Promise<void>;
+	onNotificationOpen?(
+		listener: (destination: import('./notification-types').NotificationDestination) => void,
+	): () => void;
+	notificationReady?(): Promise<import('./notification-types').NotificationDestination | null>;
+	onBotResponseSound?(listener: (volume: number, kind?: 'message') => void): () => void;
 	onOpenThread?(listener: (threadId: string) => void): () => void;
 }
 declare global {

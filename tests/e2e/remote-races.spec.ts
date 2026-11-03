@@ -2,6 +2,10 @@ import { openRemoteSettings } from './ui-controls';
 import { expect, test, type Page } from '@playwright/test';
 import { selectConversationMode } from './helpers/conversation-mode';
 
+// Chrome protocol interactions on the Mac host can exceed a minute per complete flow.
+test.setTimeout(180_000);
+test.use({ actionTimeout: 30_000 });
+
 async function desktopFixture(page: Page, navigation = false) {
 	await page.addInitScript((withNavigation) => {
 		const makeState = () => ({
@@ -67,6 +71,8 @@ async function desktopFixture(page: Page, navigation = false) {
 		const snapshot = (id: string) => ({
 			state: structuredClone(control.states[id]),
 			revision: `${id}:${control.versions[id]}`,
+			// This fixture represents an updated host; legacy-host rejection is tested separately.
+			moderationSupported: true,
 		});
 		if (withNavigation) {
 			for (const [host, state] of Object.entries(control.states) as [string, any][]) {

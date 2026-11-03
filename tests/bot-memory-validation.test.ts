@@ -101,3 +101,7 @@ describe('persistent bot memory validation', () => {
 			expect(() => validateBotCommand(command)).toThrow();
 	});
 });
+
+it('rejects empty memory content even with fake attachment fields', () => {
+ expect(validBotMemory({ ...memory, content: '', attachments: [{name:'fake'}] })).toBe(false);
+});

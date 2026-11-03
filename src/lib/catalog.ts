@@ -144,6 +144,7 @@ function incompatibility(
 	inputModalities: Modality[] = [],
 ): string | undefined {
 	if (!id.trim()) return 'Choose a model first.';
+	if (connection.providerAdapter && (kind !== 'chat' || inputModalities.some(modality => modality !== 'text'))) return 'Provider adapters currently support text and tools only.';
 	const model = getModelDefinition(connection, id);
 	// A discovered or manually entered ID has no capability declaration to enforce.
 	if (!model) return;
@@ -281,10 +282,27 @@ export function hasThinkingValue(value: JsonValue | undefined): boolean {
 	return visit(value, 0);
 }
 
+/** Empty legacy mappings stay unavailable unless the mode explicitly opts into defaults. */
+export function hasThinkingParameters(mode: ThinkingMode, endpoint: 'responses' | 'chat'): boolean {
+	const parameters = mode.parameters[endpoint];
+	return mode.useProviderDefaults === true
+		? record(parameters) && Object.keys(parameters).length === 0
+		: hasThinkingValue(parameters);
+}
+
+export function standardThinkingMode(): ThinkingMode {
+	return {
+		id: 'standard',
+		name: 'Standard',
+		useProviderDefaults: true,
+		parameters: { responses: {}, chat: {} },
+	};
+}
+
 export function availableThinkingModes(connection: Connection, modelId: string): ThinkingMode[] {
 	const endpoint = connection.chatApi === 'responses' ? 'responses' : 'chat';
 	return (getModelDefinition(connection, modelId)?.thinkingModes || []).filter((mode) =>
-		hasThinkingValue(mode.parameters[endpoint]),
+		hasThinkingParameters(mode, endpoint),
 	);
 }
 
@@ -304,7 +322,7 @@ export function resolveThinkingMode(
 	const selected = modeId || defaultThinkingMode(connection, modelId);
 	if (!selected)
 		throw new Error(
-			`Configure a thinking value for ${model?.name || modelId} in Settings → Configuration → Models before sending.`,
+			`Configure a thinking value or Standard mode for ${model?.name || modelId} in Settings → Configuration → Models before sending.`,
 		);
 	const mode = model?.thinkingModes.find((candidate) => candidate.id === selected);
 	if (!mode)
@@ -312,9 +330,9 @@ export function resolveThinkingMode(
 			`Thinking mode "${selected}" is not configured for ${model?.name || modelId}. Choose a mode again.`,
 		);
 	const endpoint = connection.chatApi === 'responses' ? 'responses' : 'chat';
-	if (!hasThinkingValue(mode.parameters[endpoint]))
+	if (!hasThinkingParameters(mode, endpoint))
 		throw new Error(
-			`${mode.name} needs an explicit thinking value for the ${endpoint === 'responses' ? 'Responses' : 'Chat'} API. Choose another thinking mode or configure its parameters.`,
+			`${mode.name} needs an explicit thinking value for the ${endpoint === 'responses' ? 'Responses' : 'Chat'} API. Choose another thinking mode, configure its parameters, or add Standard mode for provider defaults.`,
 		);
 	return mode;
 }
@@ -363,6 +381,17 @@ function validateThinkingModes(value: unknown, label: string, max: number): Set<
 			Object.keys(mode.parameters).some((key) => !['responses', 'chat'].includes(key))
 		)
 			throw new Error(`${label} / ${mode.name}: use Responses and/or Chat parameter objects.`);
+		if (mode.useProviderDefaults !== undefined && typeof mode.useProviderDefaults !== 'boolean')
+			throw new Error(`${label} / ${mode.name}: useProviderDefaults must be a boolean.`);
+		if (
+			mode.useProviderDefaults === true &&
+			Object.values(mode.parameters).some(
+				(parameters) => !record(parameters) || Object.keys(parameters).length > 0,
+			)
+		)
+			throw new Error(
+				`${label} / ${mode.name}: provider defaults require empty parameter objects.`,
+			);
 		if (mode.parameters.responses === undefined && mode.parameters.chat === undefined)
 			throw new Error(`${label} / ${mode.name}: configure parameters for at least one API.`);
 		for (const endpoint of ['responses', 'chat']) {

@@ -124,6 +124,7 @@ export async function reviewCodeAction(
 			throw new Error('Invalid review context.');
 		const connection = state.connections.find((item) => item.id === thread.connectionId);
 		if (!connection || !thread.model.trim()) throw new Error('Missing review model.');
+		if (connection.providerAdapter) return { approved: false, reason: 'Automatic Code review is unavailable for provider adapters. Use Ask permission mode or a built-in provider for automatic review.', reviewError: { code: 'configuration', attempts: 0 } };
 		const project = state.projects.find((item) => item.id === thread.projectId);
 		const imageSettings = state.toolSettings?.imageGeneration;
 		const imageConnection = state.connections.find(

@@ -1,4 +1,4 @@
-import { memo, useMemo, useState } from 'react';
+import { memo, useId, useMemo, useState } from 'react';
 import { FileText, Globe, Image, Search } from 'lucide-react';
 import type { Attachment, Thread } from '../types';
 import {
@@ -198,6 +198,11 @@ export default memo(function ConversationSources({
 		[outputs, thread],
 	);
 	const hasSourceContent = sources.hasSources || sources.truncated;
+	const listId = useId();
+	const [expandedScope, setExpandedScope] = useState<string>();
+	const scope = `${workspaceId ?? ''}:${thread?.id ?? ''}`;
+	const expanded = expandedScope === scope;
+	const visibleSources = expanded ? sources.items : sources.items.slice(0, 10);
 	return (
 		<section className="conversation-sources" aria-label="Pinned summary">
 			<div className="conversation-sources-body">
@@ -215,11 +220,18 @@ export default memo(function ConversationSources({
 							<h2>Sources</h2>
 						</header>
 						{sources.items.length > 0 && (
-							<ul className="conversation-sources-list" aria-label="Sources in this conversation">
-								{sources.items.map((source) => (
+							<ul id={listId} className="conversation-sources-list" aria-label="Sources in this conversation">
+								{visibleSources.map((source) => (
 									<SourceRow key={source.id} source={source} />
 								))}
 							</ul>
+						)}
+						{sources.items.length > 10 && (
+							<button type="button" className="conversation-sources-toggle"
+								aria-expanded={expanded} aria-controls={listId}
+								onClick={() => setExpandedScope(expanded ? undefined : scope)}>
+								{expanded ? 'See less' : `See more (${sources.items.length - 10})`}
+							</button>
 						)}
 						<ActivitySource kind="web" activity={sources.web} />
 						<ActivitySource kind="images" activity={sources.images} />

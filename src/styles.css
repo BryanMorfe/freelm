@@ -1,13 +1,8 @@
+@import url('./ui-tokens.css');
 @import url('./components/media.css');
 
 :root {
-	--font-size-ui: 13px;
-	font-family:
-		Inter,
-		-apple-system,
-		BlinkMacSystemFont,
-		'Segoe UI',
-		sans-serif;
+	font-family: var(--font-family-ui);
 	color-scheme: dark;
 	--bg: #212121;
 	--sidebar: #171717;
@@ -84,7 +79,7 @@ select {
 input:focus,
 textarea:focus,
 select:focus {
-	border-color: #ffffff38;
+	border-color: var(--focus-ring);
 }
 input::placeholder,
 textarea::placeholder {
@@ -110,8 +105,13 @@ textarea {
 	resize: none;
 }
 button:focus-visible,
-a:focus-visible {
-	outline: 2px solid var(--accent);
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+	outline: 2px solid var(--focus-ring);
 	outline-offset: 3px;
 }
 button,
@@ -282,7 +282,7 @@ h3 {
 	height: 32px;
 	border-radius: 7px;
 	flex-shrink: 0;
-	transition: background 0.15s;
+	transition: background var(--motion-feedback) var(--motion-ease);
 	color: var(--muted);
 }
 .icon-button:hover {
@@ -498,6 +498,11 @@ h3 {
 	flex: 1;
 	overflow: auto;
 	min-height: 0;
+}
+/* Fade only scrolling content; the composer and its hit targets stay opaque. */
+.chat-workspace:not(.is-empty) .chat-scroll,
+.bots-messages {
+	mask-image: linear-gradient(to bottom, #000 0, #000 calc(100% - 24px), transparent 100%);
 }
 .chat-workspace,
 .chat-scroll {
@@ -1431,8 +1436,11 @@ h3 {
 	}
 }
 @media (prefers-reduced-motion: reduce) {
-	* {
-		animation-duration: 0.001ms !important;
+	*,
+	*::before,
+	*::after {
+		animation: none !important;
+		transition: none !important;
 		scroll-behavior: auto !important;
 	}
 }

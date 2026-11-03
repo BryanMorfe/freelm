@@ -15,6 +15,7 @@ import {
 } from '../../src/lib/workflow-tools';
 import { textResult } from '../../src/lib/interaction-tools';
 import { WorkflowEngine, validateWorkflow } from './engine';
+import { definitionHash } from './definition-version';
 
 type Data = Record<string, unknown>;
 const ajv = new Ajv({ allErrors: false, strict: false });
@@ -155,6 +156,13 @@ export class WorkflowToolService implements WorkflowToolProvider {
 			);
 		if (JSON.stringify(args).length > 1_000_000)
 			throw new Error('Workflow arguments exceed the 1 MB limit.');
+		if (name === 'workflows.library_inspect') {
+			await this.engine.assertLibraryProject(context.projectId);
+			const workflow = this.engine.getWorkflow(String(args.workflowId));
+			if (!workflow) throw new Error('Library workflow not found.');
+			return textResult({ workflowId: workflow.id, revision: workflow.revision ?? 0,
+				contentHash: definitionHash(workflow), content: excerpt(workflow, args) });
+		}
 		if (name === 'workflows.list') {
 			if (args.library)
 				return textResult(
@@ -254,6 +262,19 @@ export class WorkflowToolService implements WorkflowToolProvider {
 		context: WorkflowToolContext,
 	): Promise<ToolResult> {
 		context.signal.throwIfAborted();
+		if (name === 'workflows.library_save') {
+			await this.engine.assertLibraryProject(context.projectId);
+			context.signal.throwIfAborted();
+			const existing = this.engine.getWorkflow(String(args.workflowId));
+			if (existing && !args.expectedContentHash) throw new Error('Inspect the shared library definition and supply its current content hash.');
+			const graph = authoredGraph(args.graph as Data, String(args.workflowId));
+			const saved = await this.engine.saveWorkflow({ ...graph,
+				...(existing?.settings ? { settings: existing.settings } : {}),
+				...(existing?.viewport ? { viewport: existing.viewport } : {}),
+				enabled: existing?.enabled ?? false, createdAt: existing?.createdAt ?? graph.createdAt }, {
+				expectedRevision: Number(args.expectedRevision), expectedContentHash: args.expectedContentHash as string | undefined }, true);
+			return textResult({ workflowId: saved.id, revision: saved.revision, contentHash: definitionHash(saved), enabled: saved.enabled });
+		}
 		if (name === 'workflows.create') {
 			if (
 				[args.graph, args.template, args.libraryWorkflowId].filter((value) => value !== undefined)

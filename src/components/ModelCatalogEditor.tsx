@@ -15,6 +15,8 @@ import type {
 import {
 	assertModelCatalog,
 	hasThinkingValue,
+	hasThinkingParameters,
+	standardThinkingMode,
 	modelCompactionSettings,
 	orderThinkingModes,
 } from '../lib/catalog';
@@ -68,6 +70,7 @@ function modeDraft(mode: ThinkingMode): ModeDraft {
 		id: mode.id,
 		name: mode.name,
 		key: crypto.randomUUID(),
+		useProviderDefaults: mode.useProviderDefaults,
 		responses: mode.parameters.responses ? JSON.stringify(mode.parameters.responses, null, 2) : '',
 		chat: mode.parameters.chat ? JSON.stringify(mode.parameters.chat, null, 2) : '',
 	};
@@ -193,7 +196,7 @@ export default function ModelCatalogEditor({
 	const usableDraftModes = (draft?.thinkingModes || []).filter((mode) => {
 		if (!mode.id.trim()) return false;
 		try {
-			return !!parseParameters(mode[endpoint], 'Thinking parameters');
+			return mode.useProviderDefaults || !!parseParameters(mode[endpoint], 'Thinking parameters');
 		} catch {
 			return false;
 		}
@@ -279,34 +282,35 @@ export default function ModelCatalogEditor({
 				})),
 				thinkingModes: draft.thinkingModes.map((mode) => ({
 					id: mode.id.trim(),
+					...(mode.useProviderDefaults ? { useProviderDefaults: true } : {}),
 					name: mode.name.trim(),
-					parameters: {
-						...(mode.responses.trim()
-							? {
-									responses: parseParameters(
-										mode.responses,
-										`${mode.name || 'Thinking mode'} Responses parameters`,
-									),
-								}
-							: {}),
-						...(mode.chat.trim()
-							? {
-									chat: parseParameters(
-										mode.chat,
-										`${mode.name || 'Thinking mode'} Chat parameters`,
-									),
-								}
-							: {}),
-					},
+					parameters: mode.useProviderDefaults
+						? { responses: {}, chat: {} }
+						: {
+								...(mode.responses.trim()
+									? {
+											responses: parseParameters(
+												mode.responses,
+												`${mode.name || 'Thinking mode'} Responses parameters`,
+											),
+										}
+									: {}),
+								...(mode.chat.trim()
+									? {
+											chat: parseParameters(
+												mode.chat,
+												`${mode.name || 'Thinking mode'} Chat parameters`,
+											),
+										}
+									: {}),
+							},
 				})),
 			};
 			if (model.tasks.includes('chat')) {
-				const usable = model.thinkingModes.filter((mode) =>
-					hasThinkingValue(mode.parameters[endpoint]),
-				);
+				const usable = model.thinkingModes.filter((mode) => hasThinkingParameters(mode, endpoint));
 				if (!usable.length)
 					throw new Error(
-						`Configure at least one thinking value for the ${endpoint === 'responses' ? 'Responses' : 'Chat'} API.`,
+						`Configure at least one thinking value or Standard mode for the ${endpoint === 'responses' ? 'Responses' : 'Chat'} API.`,
 					);
 				model.defaultThinkingMode =
 					usable.find((mode) => mode.id === model.defaultThinkingMode)?.id || usable[0].id;
@@ -519,22 +523,39 @@ export default function ModelCatalogEditor({
 					{draft.tasks.includes('chat') && <ContextSettings model={draft} onChange={update} />}
 					<SettingsGroup
 						title="Thinking modes"
-						description="Chat requires an explicit thinking value. New chats select the default mode below, or the first mode configured for the connection's API."
+						description="Choose Standard for models without thinking parameters, or configure explicit thinking values. New chats use the default mode below."
 						actions={
-							<button
-								className="secondary-button compact"
-								disabled={!draft.tasks.includes('chat') || draft.thinkingModes.length >= 32}
-								onClick={() =>
-									update({
-										thinkingModes: [
-											...draft.thinkingModes,
-											modeDraft({ id: '', name: '', parameters: {} }),
-										],
-									})
-								}
-							>
-								<Plus size={13} /> Add thinking mode
-							</button>
+							<>
+								<button
+									className="secondary-button compact"
+									disabled={!draft.tasks.includes('chat') || draft.thinkingModes.length >= 32}
+									onClick={() =>
+										update({
+											thinkingModes: [
+												...draft.thinkingModes,
+												modeDraft({ id: '', name: '', parameters: {} }),
+											],
+										})
+									}
+								>
+									<Plus size={13} /> Add thinking mode
+								</button>
+								<button
+									className="secondary-button compact"
+									disabled={
+										!draft.tasks.includes('chat') ||
+										draft.thinkingModes.length >= 32 ||
+										draft.thinkingModes.some((mode) => mode.id === 'standard')
+									}
+									onClick={() =>
+										update({
+											thinkingModes: [...draft.thinkingModes, modeDraft(standardThinkingMode())],
+										})
+									}
+								>
+									Add Standard mode
+								</button>
+							</>
 						}
 					>
 						{thinkingPresets.length > 0 && (
@@ -618,14 +639,27 @@ export default function ModelCatalogEditor({
 										/>
 									</label>
 								</div>
+								<label className="catalog-custom-toggle">
+									<Switch
+										aria-label={`Thinking mode ${index + 1} use provider defaults`}
+										checked={!!mode.useProviderDefaults}
+										onChange={(useProviderDefaults) =>
+											updateMode(mode.key, {
+												useProviderDefaults,
+											})
+										}
+									/>
+									Send no thinking parameters (provider defaults)
+								</label>
 								<details className="catalog-advanced">
 									<summary>
 										<ChevronDown size={13} /> Request parameters
 									</summary>
 									<p className="field-hint">
 										JSON objects are merged into their endpoint’s request. Each configured endpoint
-										must specify a thinking value; empty fields leave that API unconfigured. Request
-										content, model, and transport fields cannot be overridden.
+										must specify a thinking value unless provider defaults are selected. Empty
+										fields leave that API unconfigured. Request content, model, and transport fields
+										cannot be overridden.
 									</p>
 									<label>
 										Responses JSON
@@ -634,6 +668,7 @@ export default function ModelCatalogEditor({
 											rows={4}
 											spellCheck={false}
 											value={mode.responses}
+											disabled={mode.useProviderDefaults}
 											onChange={(event) => updateMode(mode.key, { responses: event.target.value })}
 											placeholder={'{"reasoning": {"effort": "high"}}'}
 										/>
@@ -645,6 +680,7 @@ export default function ModelCatalogEditor({
 											rows={4}
 											spellCheck={false}
 											value={mode.chat}
+											disabled={mode.useProviderDefaults}
 											onChange={(event) => updateMode(mode.key, { chat: event.target.value })}
 											placeholder={'{"reasoning_effort": "high"}'}
 										/>
@@ -658,7 +694,7 @@ export default function ModelCatalogEditor({
 								value={draftDefault}
 								disabled={!draft.tasks.includes('chat') || !usableDraftModes.length}
 								onChange={(defaultThinkingMode) => update({ defaultThinkingMode })}
-								placeholder="Configure a thinking value"
+								placeholder="Configure a mode"
 								options={orderedDraftModes
 									.filter((mode) => mode.id.trim())
 									.map((mode) => ({
@@ -682,7 +718,7 @@ export default function ModelCatalogEditor({
 									onChange(catalog.filter((_, index) => index !== editingIndex));
 									cancel();
 									setNotice(
-										'Model configuration removed. Configure a thinking value before using this model in chat.',
+										'Model configuration removed. Configure a thinking value or Standard mode before using this model in chat.',
 									);
 								}}
 							>

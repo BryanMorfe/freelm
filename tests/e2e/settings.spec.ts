@@ -4,6 +4,13 @@ import { initialState } from '../../src/lib/state';
 import type { AppState } from '../../src/types';
 
 async function openSettings(page: Page) {
+	// Settings scenarios are returning-user flows; onboarding has its own suite.
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			'freelm-onboarding-v1',
+			JSON.stringify({ version: 1, welcomeVersion: 1, announcementVersion: null }),
+		);
+	});
 	await page.goto('/');
 	await expect(page).toHaveTitle('FreeLM');
 	await expect(page.getByRole('heading', { name: 'What’s on your mind?' })).toBeVisible();
@@ -177,7 +184,9 @@ test('a reusable thinking value configures a discovered model and combines works
 	expect(requests[0]).toMatchObject({
 		model: 'reasoner',
 		reasoning: { effort: 'xhigh' },
-		instructions: 'Use metric units.\n\nConsider the prototype constraints.',
+		instructions: expect.stringContaining(
+			'Additional workspace instructions:\nUse metric units.\n\nProject instructions (Studio):\nConsider the prototype constraints.',
+		),
 	});
 });
 

@@ -1,3 +1,4 @@
+import type { ProviderTransformInput, ProviderTransformOutput } from '../../src/provider-types';
 /** FreeLM Plugin API. The installer supplies this module; no npm install is required. */
 export type JSONValue =
 	null | boolean | number | string | JSONValue[] | { [key: string]: JSONValue };
@@ -31,7 +32,11 @@ export type PluginHandler = (
 	args: Record<string, JSONValue>,
 	context: PluginContext,
 ) => JSONValue | Promise<JSONValue>;
+export type { ProviderRequest, ProviderEvent, ProviderResult, ProviderRequestPlan, ProviderTransformInput, ProviderTransformOutput } from '../../src/provider-types';
+/** Pure synchronous provider transform; no fetch/storage context. One realm lives for one request. */
+export type ProviderTransform = (input: ProviderTransformInput) => ProviderTransformOutput;
 export interface PluginDefinition {
+ providers?: Record<string, ProviderTransform>;
 	tools?: Record<string, PluginHandler>;
 	actions?: Record<string, PluginHandler>;
 	/** API v2. Bound to one visible composer; callbacks remain in the isolated runtime. */

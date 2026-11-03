@@ -1,0 +1,37 @@
+{
+  "manifest": {
+    "id": "remote-job",
+    "version": "1.0.0",
+    "title": "Synthetic async remote job",
+    "description": "Template: replace synthetic.test only after reviewing your endpoint contract.",
+    "inputs": [
+      {
+        "id": "sequence",
+        "label": "Sequence",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "id": "result",
+        "label": "Result",
+        "type": "object"
+      }
+    ],
+    "fields": [
+      {
+        "key": "credential",
+        "label": "Credential reference",
+        "kind": "secret"
+      }
+    ],
+    "permissions": {
+      "network": [
+        "https://synthetic.test"
+      ]
+    },
+    "retrySafe": false
+  },
+  "source": "import {poll} from '@freelm/custom-node-sdk'; export default {async execute(input,ctx){const secret={secretRef:ctx.config.credential};const created=await ctx.request({url:'https://synthetic.test/jobs',method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(input),secret,idempotencyKey:ctx.operationId});if(created.status!==202)throw new Error('Job creation failed');const job=JSON.parse(created.body);const result=await poll(ctx,async()=>JSON.parse((await ctx.request({url:'https://synthetic.test/jobs/'+encodeURIComponent(job.id),secret})).body),v=>v.status==='done');return {result}}};"
+}

@@ -1,4 +1,4 @@
-import type { Connection } from './types';
+import type { Attachment, Connection } from './types';
 
 /** Addresses are unique within their owning host, never global network identities. */
 export interface BotParticipant {
@@ -82,11 +82,13 @@ export interface BotJobView {
 	updatedAt: number;
 }
 export interface BotSentMessage {
+	attachments?: Attachment[];
 	id: string;
 	content: string;
 	createdAt: number;
 }
 export interface BotMessage {
+	attachments?: Attachment[];
 	id: string;
 	role: 'user' | 'bot';
 	author?: BotParticipant;
@@ -218,6 +220,7 @@ export type BotCommand =
 	| { type: 'delete-conversation'; conversationId: string }
 	| {
 			type: 'send';
+			attachments?: Attachment[];
 			conversationId: string;
 			messageId: string;
 			content: string;

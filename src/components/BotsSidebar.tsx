@@ -1,6 +1,9 @@
+import PanelHeader from './PanelHeader';
+import { IconButton } from './Button';
+import SearchField from './SearchField';
 import { userFacingError } from '../lib/user-facing-error';
 import { useMemo, useState } from 'react';
-import { LoaderCircle, Monitor, Plus, Search, SquarePen } from 'lucide-react';
+import { LoaderCircle, Monitor, Plus, SquarePen } from 'lucide-react';
 import type { BotConversation } from '../bot-types';
 import type { BotContact } from './bots-ui-types';
 import BotAvatar from './BotAvatar';
@@ -40,34 +43,27 @@ export default function BotsSidebar(p: BotsSidebarProps) {
 	);
 	return (
 		<div className="sidebar-panel bots-sidebar">
-			<div className="sidebar-panel-header">
-				<h2>Bots</h2>
-				<button
-					className="icon-button"
-					title="New group"
-					aria-label="New bot group"
-					onClick={p.onNewGroup}
-				>
-					<SquarePen size={17} />
-				</button>
-				<button
-					className="icon-button"
-					title="Create bot"
-					aria-label="Create bot"
-					onClick={p.onCreateBot}
-				>
-					<Plus size={18} />
-				</button>
-			</div>
-			<label className="bots-search">
-				<Search size={15} />
-				<input
-					aria-label="Search bots"
-					placeholder="Search"
-					value={search}
-					onChange={(event) => setSearch(event.target.value)}
-				/>
-			</label>
+			<PanelHeader
+				title="Bots"
+				actions={
+					<>
+						<IconButton
+							label="New bot group"
+							title="New group"
+							icon={SquarePen}
+							onClick={p.onNewGroup}
+						/>
+						<IconButton label="Create bot" icon={Plus} onClick={p.onCreateBot} />
+					</>
+				}
+			></PanelHeader>
+			<SearchField
+				className="bots-search"
+				label="Search bots"
+				placeholder="Search"
+				value={search}
+				onValueChange={setSearch}
+			/>
 			<div className="sidebar-scroll">
 				<div className="bots-list-heading">
 					<span>Your bots</span>

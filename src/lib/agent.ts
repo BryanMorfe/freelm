@@ -42,6 +42,7 @@ interface Round {
 	outputTokens?: number;
 }
 export interface AgentChatOptions {
+	providerCaller?: 'chat' | 'code';
 	/** Host executions inject their transport without using renderer globals. */
 	request?: typeof apiRequest;
 	/** Provider-enforced final response format; tool calls remain available. Omitted for compaction. */
@@ -71,6 +72,8 @@ export interface AgentChatOptions {
 	compactionSettings?: Partial<CodeCompactionSettings>;
 	/** Pause for queued input only after a complete model response and its tool results. */
 	shouldYieldForInput?: () => boolean;
+	/** Chat steering interrupts inference only. Active tools settle before yielding. */
+	inputSignal?: AbortSignal;
 	/** Code-only explicit context tools operate on this exact protocol context. */
 	contextControls?: boolean;
 	onUsage?: (usage: { tokens: number; estimated: boolean }) => void;
@@ -297,8 +300,12 @@ function parseRound(
 	streamedText = '',
 	streamedItems: Item[] = [],
 ): Round {
-	if (data.error || data.status === 'failed' || data.status === 'incomplete')
+	if (data.error || data.status === 'failed')
 		throw new Error(detail(data.error || data, `The response was ${String(data.status)}.`));
+	if (data.status === 'incomplete')
+		throw new Error(
+			`The response was incomplete: ${string(object(data.incomplete_details).reason) || 'generation stopped early'}.`,
+		);
 	const usage = object(data.usage);
 	const inputTokensValue = responses ? usage.input_tokens : usage.prompt_tokens;
 	const inputTokens =
@@ -520,6 +527,7 @@ async function requestRound(
 					{
 						method: 'POST',
 						path: `/${options.connection.chatApi}`,
+						providerCaller: { surface: options.providerCaller ?? (options.contextControls ? 'code' : 'chat') },
 						body: compatibleBody,
 						stream: streaming,
 					},
@@ -900,6 +908,9 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 						: {}),
 					...(summary ? {} : { stream_options: { include_usage: true } }),
 				};
+	const inferenceOptions = options.inputSignal
+			? { ...options, signal: AbortSignal.any([...(signal ? [signal] : []), options.inputSignal]) }
+			: options;
 	const compact = async (definitions: Item[], force = false) => {
 		const original = currentContext();
 		const before = tokenUsage.count(estimateInput(original, definitions));
@@ -921,7 +932,7 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 				checkAbort(signal);
 				try {
 					summary = await requestRound(
-						options,
+						inferenceOptions,
 						requestBody([...candidate, prompt], [], true),
 						() => {},
 						() => {},
@@ -936,6 +947,7 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 				}
 			}
 			checkAbort(signal);
+			if (options.inputSignal?.aborted && options.shouldYieldForInput?.()) return;
 			if (!summary.text.trim() || summary.calls.length)
 				throw new Error('The summary request returned no usable tool-free summary.');
 			const feasibleUserBudget = Math.min(20_000, Math.floor(usableTokens * 0.4));
@@ -976,6 +988,8 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 			delete transcript.usage;
 			publish();
 		} catch (error) {
+			checkAbort(signal);
+			if (options.inputSignal?.aborted && options.shouldYieldForInput?.()) return;
 			if (signal?.aborted || (error instanceof Error && error.name === 'AbortError'))
 				throw abortError();
 			throw new Error(
@@ -986,6 +1000,10 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 	};
 	for (;;) {
 		checkAbort(signal);
+		if (options.inputSignal?.aborted) {
+			const yielded = yieldForInput();
+			if (yielded) return yielded;
+		}
 		// Discovery takes effect on the next model request, never midway through a call batch.
 		const offeredNames = new Map(names);
 		const offeredTools = [...available.values()];
@@ -996,6 +1014,7 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 			strict: false,
 		}));
 		if (options.compaction) await compact(definitions);
+		if (options.inputSignal?.aborted && options.shouldYieldForInput?.()) { phase = 'working'; return yieldForInput()!; }
 		const outputBudget = {
 			text: 512 * 1024,
 			images: 48 * 1024 * 1024,
@@ -1032,12 +1051,19 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 		const previousActivity = [...activity];
 		try {
 			round = await requestRound(
-				options,
+				inferenceOptions,
 				requestBody(currentContext(), definitions),
 				updateText,
 				updateReasoning,
 			);
 		} catch (error) {
+			if (options.inputSignal?.aborted && !signal?.aborted && options.shouldYieldForInput?.()) {
+				// An incomplete inference has issued no tools. Keep earlier completed rounds.
+				content = previousContent;
+				activity = previousActivity;
+				phase = 'working';
+				return yieldForInput()!;
+			}
 			if (
 				!options.compaction ||
 				!contextOverflow(error) ||
@@ -1050,17 +1076,27 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 			activity = previousActivity;
 			firstTextAt = undefined;
 			await compact(definitions, true);
+			if (options.inputSignal?.aborted && options.shouldYieldForInput?.()) { phase = 'working'; return yieldForInput()!; }
 			estimatedInput = estimateInput(currentContext(), definitions);
 			phase = 'working';
 			publish();
-			round = await requestRound(
-				options,
-				requestBody(currentContext(), definitions),
-				updateText,
-				updateReasoning,
-			);
+			try {
+				round = await requestRound(inferenceOptions, requestBody(currentContext(), definitions), updateText, updateReasoning);
+			} catch (retryError) {
+				checkAbort(signal);
+				if (!options.inputSignal?.aborted || !options.shouldYieldForInput?.()) throw retryError;
+				content = previousContent;
+				activity = previousActivity;
+				return yieldForInput()!;
+			}
 		}
 		checkAbort(signal);
+		if (options.inputSignal?.aborted && options.shouldYieldForInput?.()) {
+			content = previousContent;
+			activity = previousActivity;
+			phase = 'working';
+			return yieldForInput()!;
+		}
 		tokenUsage.observe(estimatedInput, round.inputTokens);
 		options.onUsage?.({
 			tokens:
@@ -1094,10 +1130,10 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 			return yieldForInput() ?? publish();
 		}
 		const chatImages: Item[] = [];
-		const interruptCalls = (pendingCalls: Call[]) => {
+		const interruptCalls = (pendingCalls: Call[], reason = 'Tool call interrupted by cancellation.') => {
 			const cancelled: ToolResult = {
 				isError: true,
-				content: [{ type: 'text', text: 'Tool call interrupted by cancellation.' }],
+				content: [{ type: 'text', text: reason }],
 			};
 			// Every requested call needs a matching result, including calls not yet executed.
 			for (const pending of pendingCalls) {
@@ -1121,17 +1157,22 @@ export async function streamAgentChat(options: AgentChatOptions): Promise<AgentC
 						? {
 								type: 'function_call_output',
 								call_id: pending.id,
-								output: 'Tool error: Tool call interrupted by cancellation.',
+								output: `Tool error: ${reason}`,
 							}
 						: {
 								role: 'tool',
 								tool_call_id: pending.id,
-								content: 'Tool error: Tool call interrupted by cancellation.',
+								content: `Tool error: ${reason}`,
 							},
 				);
 			}
 		};
 		for (const [callIndex, call] of round.calls.entries()) {
+			if (options.inputSignal?.aborted && options.shouldYieldForInput?.()) {
+				interruptCalls(round.calls.slice(callIndex), 'Not executed: new user instructions arrived.');
+				transcript.items.push(...chatImages);
+				return yieldForInput()!;
+			}
 			const name = offeredNames.get(call.name);
 			const record: ToolCallRecord = {
 				id: call.id,

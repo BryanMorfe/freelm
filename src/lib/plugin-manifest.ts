@@ -1,3 +1,4 @@
+import { validateProviderDeclarations } from './provider-contract';
 import type {
 	PluginAccess,
 	PluginManifest,
@@ -12,6 +13,7 @@ import type {
 
 export const PLUGIN_CAPABILITY_LABELS: Record<PluginCapability, string> = {
 	'conversation.read': 'Read visible text from the current conversation',
+	'provider.use': 'Adapt model requests and read their conversation contents',
 	'inference.text': 'Send plugin-provided text to the selected inference model',
 	'composer.state': 'Read composer availability and empty state',
 	'composer.presentation': 'Set composer placeholders and presentation',
@@ -342,7 +344,7 @@ export function validatePluginManifest(value: unknown): PluginManifest {
 			'tools',
 			'tabs',
 			'actions',
-			...(surfaceAPI ? ['activation', 'settings', 'views'] : []),
+			...(surfaceAPI ? ['activation', 'settings', 'views', 'providers'] : []),
 		]);
 		const {
 			tools = surfaceAPI ? [] : undefined,
@@ -359,6 +361,7 @@ export function validatePluginManifest(value: unknown): PluginManifest {
 		)
 			throw new Error('Invalid or oversized plugin contributions.');
 		contributes = {
+			...(value.contributes.providers === undefined ? {} : { providers: validateProviderDeclarations(value.contributes.providers) }),
 			tools: unique(
 				tools.map((tool) => {
 					if (
@@ -484,8 +487,8 @@ export function validatePluginManifest(value: unknown): PluginManifest {
 				);
 			}
 		}
-		if (!contributes.tools.length && !contributes.tabs.length && !contributes.activation)
-			throw new Error('Plugin must contribute at least one tool, tab, or surface activation.');
+		if (!contributes.tools.length && !contributes.tabs.length && !contributes.activation && !contributes.providers?.length)
+			throw new Error('Plugin must contribute at least one tool, tab, surface activation, or provider.');
 	} else {
 		if (!record(value.mcp)) throw new Error('Plugin requires an HTTP MCP endpoint.');
 		fields(value.mcp, ['url']);

@@ -25,6 +25,7 @@ export interface BotMessageContext {
 export function buildBotMessageContext(
 	history: readonly BotMessage[],
 	self: BotParticipant,
+	includeAttachmentNotice = true,
 ): BotMessageContext {
 	const messages: BotMessageContext['messages'] = [];
 	const references: {
@@ -45,14 +46,15 @@ export function buildBotMessageContext(
 	for (const message of history) {
 		if (message.status !== 'completed') continue;
 		if (message.role === 'user') precedingUserText = message.content;
-		const content =
+		let content =
 			message.role === 'user'
 				? message.content
 				: stripBotMessageEnvelope(
 						message.content,
 						(message.replyTo && userTexts.get(message.replyTo)) || precedingUserText,
 					);
-		if (!content.trim()) continue;
+		if (includeAttachmentNotice && message.attachments?.length) content += '\n[Attached files are delivered and stored, but their contents are not available for analysis in this bot context. Do not claim to have inspected them.]\n' + JSON.stringify(message.attachments.map((a, index) => ({ name: a.name, type: a.type, attachmentRef: `bot-attachment:${message.id}:${index}` })));
+		if (!content.trim() && !message.attachments?.length) continue;
 		const isPeer =
 			message.role === 'bot' &&
 			!(message.author?.hostId === self.hostId && message.author.botId === self.botId);

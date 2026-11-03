@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 2,
+  "id": "example.provider-adapters",
+  "name": "Synthetic Provider Adapters",
+  "version": "0.1.0",
+  "description": "Experimental synthetic protocol examples. Not a live provider integration.",
+  "auth": { "type": "none" },
+  "runtime": { "apiVersion": 2, "entry": "index.ts" },
+  "contributes": {
+    "providers": [
+      { "id": "unconventional", "name": "Nested JSON fixture", "capabilities": { "tools": false, "streaming": false } },
+      { "id": "messages", "name": "Messages streaming fixture", "capabilities": { "tools": true, "streaming": true } }
+    ]
+  },
+  "permissions": { "network": ["https://fixture.invalid"], "storage": false, "capabilities": ["provider.use"] }
+}

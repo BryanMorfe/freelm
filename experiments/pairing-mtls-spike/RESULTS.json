@@ -1,0 +1,78 @@
+{
+  "status": "PASS",
+  "scope": "disposable macOS Swift URLSession ↔ Node HTTPS; no system Keychain or trust roots",
+  "checks": [
+    {
+      "test": "Swift and Node TLS 1.3 mutual authentication",
+      "result": "200 {\"protocol\":\"TLSv1.3\",\"identity\":\"synthetic-mac\",\"result\":\"authorized\"}"
+    },
+    {
+      "test": "valid but unauthorized device rejected before negative handshakes",
+      "result": "TLS_REJECTED -1206",
+      "serverDecision": {
+        "decision": "denied",
+        "protocol": "TLSv1.3"
+      }
+    },
+    {
+      "test": "wrong QR anchor rejected",
+      "result": "TLS_REJECTED -999"
+    },
+    {
+      "test": "no client identity rejected",
+      "result": "TLS_REJECTED -999"
+    },
+    {
+      "test": "foreign client CA rejected",
+      "result": "TLS_REJECTED -1005"
+    },
+    {
+      "test": "valid but unauthorized device rejected",
+      "result": "TLS_REJECTED -1206",
+      "serverDecision": {
+        "decision": "denied",
+        "protocol": "TLSv1.3"
+      }
+    },
+    {
+      "test": "authorized device survives server process restart",
+      "result": "200 {\"protocol\":\"TLSv1.3\",\"identity\":\"synthetic-mac\",\"result\":\"authorized\"}"
+    },
+    {
+      "test": "revocation denies next request",
+      "result": "TLS_REJECTED -1206",
+      "serverDecision": {
+        "decision": "denied",
+        "protocol": "TLSv1.3"
+      }
+    },
+    {
+      "test": "revocation survives server process restart",
+      "result": "TLS_REJECTED -1206",
+      "serverDecision": {
+        "decision": "denied",
+        "protocol": "TLSv1.3"
+      }
+    },
+    {
+      "test": "corrupt authorization fails closed",
+      "result": "503 authorization-unavailable",
+      "serverDecision": {
+        "decision": "unavailable",
+        "protocol": "TLSv1.3"
+      }
+    },
+    {
+      "test": "missing authorization fails closed",
+      "result": "503 authorization-unavailable",
+      "serverDecision": {
+        "decision": "unavailable",
+        "protocol": "TLSv1.3"
+      }
+    },
+    {
+      "test": "wrong server hostname rejected despite trusted CA",
+      "result": "TLS_REJECTED -999"
+    }
+  ]
+}

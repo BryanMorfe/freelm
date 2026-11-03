@@ -1,0 +1,51 @@
+--- a/src/endpoint.rs
++++ b/src/endpoint.rs
+@@ -93,6 +93,21 @@
+     /// Replay the n0 preset with relays disabled.
+     pub fn apply_n0_disable_relay(&self) {
+         self.map(|b| presets::N0DisableRelay.apply(b));
++    }
++
++    /// Remove all IP transports before explicitly adding loopback sockets.
++    pub fn clear_ip_transports(&self) {
++        self.map(|b| b.clear_ip_transports());
++    }
++
++    /// Remove every address lookup service; never discover public peers in QA.
++    pub fn clear_address_lookup(&self) {
++        self.map(|b| b.clear_address_lookup());
++    }
++
++    /// Disable UPnP, PCP and NAT-PMP gateway probing.
++    pub fn disable_port_mapping(&self) {
++        self.map(|b| b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled));
+     }
+ 
+     /// Set the endpoint secret key (32 bytes).
+--- a/iroh-js/src/endpoint.rs
++++ b/iroh-js/src/endpoint.rs
+@@ -81,6 +81,24 @@
+     #[napi]
+     pub fn apply_n0_disable_relay(&self) {
+         self.map(|b| presets::N0DisableRelay.apply(b));
++    }
++
++    /// Remove all IP transports before explicitly adding loopback sockets.
++    #[napi]
++    pub fn clear_ip_transports(&self) {
++        self.map(|b| b.clear_ip_transports());
++    }
++
++    /// Remove every address lookup service; never discover public peers in QA.
++    #[napi]
++    pub fn clear_address_lookup(&self) {
++        self.map(|b| b.clear_address_lookup());
++    }
++
++    /// Disable UPnP, PCP and NAT-PMP gateway probing.
++    #[napi]
++    pub fn disable_port_mapping(&self) {
++        self.map(|b| b.portmapper_config(iroh::endpoint::PortmapperConfig::Disabled));
+     }
+ 
+     /// Set the endpoint secret key (32 bytes).

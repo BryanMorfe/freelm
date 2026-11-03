@@ -1,8 +1,19 @@
+import { randomUUID } from 'node:crypto';
+import { CrashBudget, RendererRecovery } from './recovery';
+import { recoveryLog } from './recovery-log';
+import { CustomNodeServices } from './custom-nodes/services';
+let customNodeServices: CustomNodeServices | undefined;
+import { CustomNodeHost } from './custom-nodes/host';
+let customNodes: CustomNodeHost | undefined;
+import { routeProviderRequest } from './provider-routing';
 import { WorkflowEngine, validateWorkflowCommand } from './workflows/engine';
 import { WorkflowStore } from './workflows/store';
 import { createWorkflowAdapters } from './workflows/adapters';
 import { WorkflowAssets } from './workflows/assets';
 import { WorkflowPreviews } from './workflows/previews';
+import { unreadBotMessages } from '../src/lib/bot-unread';
+import { CompletionNotifications } from './completion-notifications';
+import type { CompletionEvent, NotificationDestination } from '../src/notification-types';
 import { WorkflowThreadNotifications } from './workflows/notifications';
 import { WorkflowToolService } from './workflows/tool-service';
 import { SchedulerService } from './scheduler/service';
@@ -113,6 +124,12 @@ const appIconPath = path.join(app.getAppPath(), 'resources/branding/icon.png');
 let mainWindow: BrowserWindow | null = null;
 let store: StateStore;
 let authority: WorkspaceAuthority;
+/** Resolve adapter secrets/binding on this host, never from renderer-provided credentials. */
+async function localProviderRequest(request: Parameters<typeof performRequest>[0], onChunk: (text: string) => void, signal?: AbortSignal) {
+ const connection = request.connectionId ? (await authority.loadModerationState()).connections.find(c => c.id === request.connectionId) : undefined;
+ return routeProviderRequest(connection, request, request.providerCaller ?? { surface: 'chat' }, plugins, onChunk, signal);
+}
+
 let composer: ComposerContextHost;
 let codeSurface: CodeSurfaceService;
 let codeBrowser: CodeBrowserService | undefined;
@@ -124,6 +141,48 @@ let scheduleTools: SchedulerToolService;
 let schedulerReady = false;
 let schedulerInitializationError = '';
 let pendingSchedulerNavigation = false;
+let completionNotifications: CompletionNotifications | undefined;
+let pendingNotification: NotificationDestination | null = null;
+let badgeRevision = 0;
+async function refreshBotBadge() {
+ const revision = ++badgeRevision;
+ try {
+  const snapshot = await bots.snapshot();
+  if (revision === badgeRevision) app.setBadgeCount(unreadBotMessages(snapshot.conversations));
+ } catch { /* Preserve the last known count when the mailbox is unavailable. */ }
+}
+let notificationRendererReady = false;
+function openCompletionNotification(destination: NotificationDestination) {
+	pendingNotification = destination;
+	if (!mainWindow || mainWindow.isDestroyed()) createWindow();
+	if (mainWindow?.isMinimized()) mainWindow.restore();
+	mainWindow?.show();
+	mainWindow?.focus();
+	if (notificationRendererReady && mainWindow && !mainWindow.isDestroyed()) {
+		mainWindow.webContents.send('freelm:open-notification', destination);
+		pendingNotification = null;
+	}
+}
+function submitCompletion(event: CompletionEvent) {
+	return completionNotifications
+		?.emit(event)
+		.catch(() => console.error('Completion notification could not be submitted.'));
+}
+async function localCompletion(
+	kind: NotificationDestination['kind'],
+	entityId: string,
+	runId: string,
+	title: string,
+	scheduled = false,
+) {
+	const hostId = (await instances.status()).host.instanceId;
+	await submitCompletion({
+		destination: { hostId, workspaceId: 'local', kind, entityId, runId },
+		outcome: 'completed',
+		title,
+		scheduled,
+	});
+}
 let workflows: WorkflowEngine;
 let workflowHostInitialized = false;
 let workflowThreadsReady = false;
@@ -149,6 +208,8 @@ let closeRequested = false;
 let allowWindowClose = false;
 const requests = new Map<string, AbortController>();
 const workspaceTransfers = new WorkspaceTransferPool();
+const rendererCrashBudget = new CrashBudget();
+const logRecovery = recoveryLog(path.join(storagePaths.home, 'logs'));
 
 function isAppUrl(candidate: string) {
 	try {
@@ -277,6 +338,7 @@ async function workflowSnapshot(
 	]);
 	return {
 		...snapshot,
+ customNodes: customNodes?.list().map(n=>customNodeServices?.metadata(n)??n) ?? [],
 		projects: context.projects.filter((project) => projectKind(project) === 'code'),
 		connections: current?.connections.map((connection) => ({ ...connection, apiKey: '' })) ?? [],
 	};
@@ -324,6 +386,9 @@ function registerBridge() {
 		validateSender(event);
 		assertWorkflowsReady();
 		validateWorkflowCommand(command);
+		if(command.type==='discover-custom-node'){const installed=customNodes?.list().find(n=>n.manifest.id===command.packageId&&n.manifest.version===command.version&&n.digest===command.digest);if(!installed||!customNodes||!installed.manifest.discovery)throw new Error('Discovery is not available for this node version.');if(!command.config||typeof command.config!=='object'||Array.isArray(command.config))throw new Error('Invalid discovery configuration.');const result=await customNodes.discover({packageId:command.packageId,version:command.version,digest:command.digest,definition:installed.manifest},command.config,AbortSignal.timeout(120000));return {...await workflowSnapshot(),customNodeDiscovery:{packageId:command.packageId,version:command.version,result}};}
+ if(command.type==='authorize-custom-node'||command.type==='set-custom-node-secret'){const installed=customNodes?.list().find(n=>n.manifest.id===command.packageId&&n.manifest.version===command.version&&n.digest===command.digest);if(!installed||!customNodeServices)throw new Error('Custom node version is unavailable.');if(command.type==='authorize-custom-node')await customNodeServices.authorize(installed,command.network,command.inference);else await customNodeServices.setSecret(installed,command.name,command.value,command.origin,command.header,command.prefix);return workflowSnapshot();}
+ if(command.type==='install-custom-node'||command.type==='remove-custom-node'){if(!customNodes)throw new Error('Custom nodes are not ready.');if(command.type==='install-custom-node')await customNodes.install(command.source);else await customNodes.remove(command.packageId,command.version);return workflowSnapshot();}
 		if (command.type === 'catalog') {
 			const workflow = command.bindingId
 				? workflows.getBinding(command.bindingId)?.workflowSnapshot
@@ -578,6 +643,7 @@ function registerBridge() {
 	ipcMain.handle('freelm:request', async (event, request: unknown, streamToken: unknown) => {
 		validateSender(event);
 		validateRequest(request);
+		if (request.providerCaller && (!['chat', 'code'].includes(request.providerCaller.surface) || request.providerCaller.botId || request.providerCaller.remote)) throw new Error('Renderer requests cannot claim a bot or remote identity.');
 		const streaming = request.stream === true;
 		let token = '';
 		if (streaming) {
@@ -742,6 +808,28 @@ function registerBridge() {
 		validateSender(event);
 		return search.stop();
 	});
+    ipcMain.handle('freelm:local-pairing-status', event => { validateSender(event); return instances.localPairingStatus(); });
+    ipcMain.handle('freelm:local-pairing-start', (event, options) => {
+        validateSender(event);
+        return instances.startLocalPairing(options, path.join(process.resourcesPath, 'pairing', 'freelm-pairing-vault'));
+    });
+    ipcMain.handle('freelm:local-pairing-invite', event => { validateSender(event); return instances.inviteLocalPairing(); });
+    ipcMain.handle('freelm:local-pairing-decide', (event, id, keyHash, approve) => { validateSender(event); return instances.decideLocalPairing(id,keyHash,approve); });
+    ipcMain.handle('freelm:local-pairing-revoke', event => { validateSender(event); return instances.revokeLocalPairing(); });
+    ipcMain.handle('freelm:local-pairing-stop', event => { validateSender(event); return instances.stopLocalPairing(); });
+    ipcMain.handle('freelm:mobile-status', (event) => { validateSender(event); return instances.mobileStatus(); });
+    ipcMain.handle('freelm:mobile-start', async (event, options: { endpoint: string; bindAddress: string }) => {
+        validateSender(event);
+        if (!options || typeof options.endpoint !== 'string' || typeof options.bindAddress !== 'string') throw new Error('Invalid iPhone sharing configuration.');
+        const cert = await dialog.showOpenDialog({ title: 'Choose the HTTPS certificate chain (PEM)', properties: ['openFile'] });
+        if (cert.canceled || !cert.filePaths[0]) return null;
+        const key = await dialog.showOpenDialog({ title: 'Choose the matching private key (PEM)', properties: ['openFile'] });
+        if (key.canceled || !key.filePaths[0]) return null;
+        return instances.startMobile({ endpoint: options.endpoint, bindAddress: options.bindAddress, certPath: cert.filePaths[0], keyPath: key.filePaths[0] });
+    });
+    ipcMain.handle('freelm:mobile-stop', (event) => { validateSender(event); return instances.stopMobile(); });
+    ipcMain.handle('freelm:mobile-invite', (event) => { validateSender(event); return instances.inviteMobile(); });
+    ipcMain.handle('freelm:mobile-revoke', (event, id: string) => { validateSender(event); return instances.revokeMobile(id); });
 	ipcMain.handle('freelm:instance-status', (event) => {
 		validateSender(event);
 		return instances.status();
@@ -806,25 +894,39 @@ function registerBridge() {
 			return instances.asset(target, connectionId, url);
 		},
 	);
-	ipcMain.handle('freelm:notify-completion', (event, input: unknown) => {
+	ipcMain.handle('freelm:notification-ready', (event) => {
+		validateSender(event);
+		notificationRendererReady = true;
+		const destination = pendingNotification;
+		pendingNotification = null;
+		return destination;
+	});
+	ipcMain.handle('freelm:notify-completion', async (event, input: unknown) => {
 		validateSender(event);
 		if (!input || typeof input !== 'object' || Array.isArray(input))
 			throw new Error('Invalid notification.');
-		const { threadId, title } = input as { threadId: unknown; title: unknown };
+		const {
+			threadId,
+			title,
+			workspaceId = 'local',
+			runId,
+		} = input as { threadId: string; title: string; workspaceId?: string; runId?: string };
 		validateRequestId(threadId);
-		if (typeof title !== 'string' || title.length > 4096)
-			throw new Error('Invalid notification title.');
-		if (!Notification.isSupported() || mainWindow?.isFocused()) return;
-		const notification = new Notification({
-			title: `FreeLM · ${title.slice(0, 160)}`,
-			body: 'Your reply is ready.',
+		validateRequestId(workspaceId);
+		if (typeof title !== 'string' || title.length > 4096 || !runId)
+			throw new Error('Invalid notification identity.');
+		validateRequestId(runId);
+		const overview = await instances.status();
+		const hostId =
+			workspaceId === 'local'
+				? overview.host.instanceId
+				: overview.instances.find((x) => x.id === workspaceId)?.instanceId;
+		if (!hostId) throw new Error('The notification computer is no longer available.');
+		await completionNotifications?.emit({
+			destination: { hostId, workspaceId, kind: 'thread', entityId: threadId, runId },
+			outcome: 'completed',
+			title,
 		});
-		notification.on('click', () => {
-			mainWindow?.show();
-			mainWindow?.focus();
-			mainWindow?.webContents.send('freelm:open-thread', threadId);
-		});
-		notification.show();
 	});
 	ipcMain.handle('freelm:workspace-backup', (event, state: AppState) => {
 		validateSender(event);
@@ -907,6 +1009,7 @@ function createMenu() {
 function createWindow() {
 	closeRequested = false;
 	allowWindowClose = false;
+	notificationRendererReady = false;
 	mainWindow = new BrowserWindow({
 		width: 1440,
 		height: 940,
@@ -931,6 +1034,9 @@ function createWindow() {
 			webviewTag: false,
 		},
 	});
+	mainWindow.webContents.on('did-start-loading', () => {
+		notificationRendererReady = false;
+	});
 	codeBrowser?.dispose();
 	codeBrowser = new CodeBrowserService(mainWindow, {
 		onState: (state) => {
@@ -943,6 +1049,51 @@ function createWindow() {
 		},
 	});
 	const contents = mainWindow.webContents;
+	const window = mainWindow;
+	let rendererUnavailable = false;
+	let cleanup: Promise<void> | undefined;
+	let recoveryDialog = false;
+	const detachRenderer = () => {
+		if (cleanup) return cleanup;
+		notificationRendererReady = false;
+		pluginSurfaces?.closeOwner(contents.id);
+		pluginViews.clear();
+		codeHtmlViews.clear();
+		workspaceTransfers.clear(contents.id);
+		for (const controller of requests.values()) controller.abort();
+		cleanup = Promise.all([cancelAgentRuns?.(), botTasks?.rendererClosed()])
+			.then(() => store.flush()).catch((error) => {
+				cleanup = undefined;
+				throw error;
+			});
+		return cleanup;
+	};
+	const recovery = new RendererRecovery({
+		budget: rendererCrashBudget,
+		cleanup: detachRenderer,
+		reload: () => devUrl ? window.loadURL(devUrl) : window.loadFile(fileURLToPath(appUrl)),
+		log: (event, failure) => { void logRecovery('renderer', event, failure); },
+		fallback: (reason) => {
+			if (recoveryDialog || window.isDestroyed() || quitRequested || closeRequested) return;
+			recoveryDialog = true;
+			window.show();
+			void dialog.showMessageBox(window, {
+				type: 'error',
+				title: 'FreeLM needs your attention',
+				message: reason === 'crash-loop' ? 'FreeLM stopped automatic recovery after repeated failures.' : 'FreeLM could not safely recover this window.',
+				detail: 'Your previously saved chats and settings remain on disk. In-flight work will not be resent. You can try reloading, or close this window and reopen FreeLM. Diagnostics are saved in the logs folder inside your FreeLM data folder.',
+				buttons: ['Reload FreeLM', 'Close window'],
+				defaultId: 1,
+				cancelId: 1,
+				noLink: true,
+			}).then(({ response }) => {
+				recoveryDialog = false;
+				if (window.isDestroyed() || quitRequested) return;
+				if (response === 0) recovery.retry();
+				else window.close();
+			}).catch(() => { recoveryDialog = false; });
+		},
+	});
 	contents.on('context-menu', (_event, params) => {
 		const template = textContextMenu(params);
 		if (template.length && mainWindow)
@@ -969,24 +1120,22 @@ function createWindow() {
 	});
 	contents.on('did-start-navigation', (_event, _url, inPlace, mainFrame) => {
 		if (mainFrame && !inPlace) {
-			pluginSurfaces?.closeOwner(contents.id);
-			pluginViews.clear();
-			codeHtmlViews.clear();
-			workspaceTransfers.clear(contents.id);
-			void botTasks
-				?.rendererClosed()
-				.catch((error) => console.error('Detached renderer task recovery:', error));
+			void detachRenderer().catch(() => { void logRecovery('renderer', 'cleanup-failed'); });
 		}
 	});
-	contents.on('did-finish-load', () => agent?.replayApprovals());
-	contents.on('render-process-gone', () => {
-		pluginSurfaces?.closeOwner(contents.id);
-		void botTasks
-			?.rendererClosed()
-			.catch((error) => console.error('Detached renderer task recovery:', error));
-		workspaceTransfers.clear(contents.id);
-		void cancelAgentRuns?.();
-		for (const controller of requests.values()) controller.abort();
+	contents.on('did-finish-load', () => {
+		rendererUnavailable = false;
+		cleanup = undefined;
+		recovery.loaded();
+		agent?.replayApprovals();
+	});
+	contents.on('render-process-gone', (_event, details) => {
+		rendererUnavailable = true;
+		if (quitRequested || closeRequested) {
+			void detachRenderer().catch(() => { void logRecovery('renderer', 'cleanup-failed'); });
+			return;
+		}
+		recovery.failed({ reason: details.reason, exitCode: details.exitCode });
 	});
 	contents.session.setPermissionCheckHandler((webContents, permission, _origin, details) => {
 		return webContents === contents && permission === 'media' && details.mediaType === 'audio';
@@ -1006,6 +1155,19 @@ function createWindow() {
 		if (allowWindowClose) return;
 		event.preventDefault();
 		closeRequested = true;
+		recovery.dispose();
+		if (rendererUnavailable) {
+			void detachRenderer().then(() => {
+				allowWindowClose = true;
+				if (!window.isDestroyed()) window.close();
+				// The first Quit was deferred by the asynchronous close above.
+				if (quitRequested) app.quit();
+			}).catch(() => {
+				closeRequested = false;
+				dialog.showErrorBox('FreeLM could not finish recovery', 'The window remains open because interrupted work could not be saved. Check available disk space and the FreeLM recovery log before closing.');
+			});
+			return;
+		}
 		void botTasks
 			?.rendererClosed()
 			.catch((error) => console.error('Detached renderer task recovery:', error));
@@ -1014,6 +1176,7 @@ function createWindow() {
 		contents.send('freelm:prepare-close');
 	});
 	mainWindow.on('closed', () => {
+		recovery.dispose();
 		void botTasks
 			?.rendererClosed()
 			.catch((error) => console.error('Detached renderer task recovery:', error));
@@ -1022,7 +1185,10 @@ function createWindow() {
 		for (const controller of requests.values()) controller.abort();
 		mainWindow = null;
 	});
-	void (devUrl ? mainWindow.loadURL(devUrl) : mainWindow.loadFile(fileURLToPath(appUrl)));
+	void (devUrl ? mainWindow.loadURL(devUrl) : mainWindow.loadFile(fileURLToPath(appUrl))).catch(() => {
+		rendererUnavailable = true;
+		recovery.failed({ reason: 'load-failed' });
+	});
 }
 
 void app
@@ -1092,7 +1258,7 @@ void app
 			},
 			execute: (hostId, request, onChunk, signal) =>
 				hostId === 'local'
-					? performRequest(request, onChunk, signal)
+					? localProviderRequest(request, onChunk, signal)
 					: instances.request(hostId, request, onChunk, signal),
 			viewURL: (html, options) => pluginViews.create(html, options),
 			foregroundBusy: () => requests.size > 0,
@@ -1102,13 +1268,14 @@ void app
 			(request) => authority.loadComposerState(request),
 			(query) => agent.service.computerApps(query),
 		);
-		mediaModeration = new MediaModerationGuard(() => authority.loadModerationState());
+		mediaModeration = new MediaModerationGuard(() => authority.loadModerationState(), localProviderRequest);
 		// Validate/decrypt before any renderer can initialize and autosave a fresh state.
 		await authority.load();
 		const searchBundle = app.isPackaged
 			? path.join(process.resourcesPath, 'search')
 			: path.resolve(__dirname, '../resources/search');
 		searchService = new SearchServiceManager({
+			onRecovery: (event, details) => { void logRecovery('search', event, details); },
 			searchHome: path.join(storagePaths.home, 'search'),
 			bundleRoot: searchBundle,
 			executablePath: path.join(
@@ -1142,17 +1309,37 @@ void app
 			agent.service,
 		);
 		await instances.status();
+		completionNotifications = new CompletionNotifications({
+			filename: path.join(storagePaths.home, 'completion-notifications.json'),
+			preferences: () => authority.loadNotificationPreferences(),
+			focused: () => !!mainWindow && mainWindow.isFocused() && !mainWindow.isMinimized(),
+			supported: () => Notification.isSupported(),
+			sound: (volume, kind) => {
+				if (notificationRendererReady && mainWindow && !mainWindow.isDestroyed())
+					mainWindow.webContents.send('freelm:bot-response-sound', volume, kind);
+			},
+			show: ({ destination, ...options }) => {
+				const notification = new Notification(options);
+				notification.on('click', () => openCompletionNotification(destination));
+				notification.on('failed', () =>
+					console.error('The operating system could not display a completion notification.'),
+				);
+				notification.show();
+			},
+		});
 		botTasks = new HostTaskService({
 			authority,
 			agent: agent.service,
 			hostId: async () => (await instances.status()).host.instanceId,
-			request: performRequest,
+			request: localProviderRequest,
 			changed: () => {
 				const contents =
 					mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined;
 				if (contents && !contents.isDestroyed()) contents.send('freelm:host-tasks-changed');
 			},
 			completed: async (thread) => {
+				const last = thread.messages.filter((m) => m.role === 'assistant').at(-1);
+				if (last) await localCompletion('thread', thread.id, last.id, thread.title);
 				if (workflows && workflowHostInitialized)
 					await workflows.emit('thread.completed', {
 						threadId: thread.id,
@@ -1170,11 +1357,22 @@ void app
 		instances.setBotTasks(botTasks);
 		const workflowRoot = path.join(storagePaths.home, 'workflows');
 		const artifactDirectory = path.join(workflowRoot, 'artifacts');
+ customNodeServices=new CustomNodeServices(path.join(workflowRoot,'custom-node-authority'),secrets,async(args,signal)=>{
+ if(typeof args.connectionId!=='string'||typeof args.model!=='string'||typeof args.prompt!=='string'||args.prompt.length>100000)throw new Error('Invalid inference request.');
+ const state=await authority.loadToolState();const connection=state?.connections.find(c=>c.id===args.connectionId);if(!connection)throw new Error('Selected FreeLM connection is unavailable.');
+ const response=await localProviderRequest({id:randomUUID(),connectionId:connection.id,baseUrl:connection.baseUrl,apiKey:connection.apiKey,path:'/chat/completions',method:'POST',body:{model:args.model,messages:[{role:'user',content:args.prompt}]},stream:false,providerCaller:{surface:'code'}},()=>{},signal);
+ if(response.status>=400)throw new Error('FreeLM inference request failed.');
+ const body=connection.apiKey?response.body.split(connection.apiKey).join('[redacted]'):response.body;
+ return JSON.parse(body);
+ });
+ await customNodeServices.init();
+ customNodes=new CustomNodeHost(path.join(workflowRoot,'custom-nodes'),customNodeServices);
+ await customNodes.init();
 		workflowPreviews = new WorkflowPreviews(new WorkflowAssets(artifactDirectory));
 		protocol.handle('freelm-workflow', (request) => workflowPreviews.respond(request));
 		workflowAdapters = createWorkflowAdapters({
 			loadState: () => authority.loadToolState(),
-			request: (request, onChunk, signal) => performRequest(request, onChunk, signal),
+			request: (request, onChunk, signal) => localProviderRequest({ ...request, providerCaller: { surface: 'code' } }, onChunk, signal),
 			createAgentHost: (load) =>
 				new AgentHost(
 					load,
@@ -1228,7 +1426,8 @@ void app
 				return project ? { ...project, directories: project.directories ?? [] } : undefined;
 			},
 			canRun: () => workflowHostInitialized && !workflowInitializationError,
-			execute: workflowAdapters.execute,
+			execute: (node,inputs,context)=>node.type==='custom' ? customNodes!.execute(node,inputs,context) : workflowAdapters.execute(node,inputs,context),
+			onCompleted: (run) => localCompletion('workflow', run.workflowId, run.id, 'Workflow'),
 			onChange: () => {
 				const contents =
 					mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined;
@@ -1255,6 +1454,15 @@ void app
 			console.error(workflowInitializationError);
 		}
 		bots = new BotHost({
+			request: localProviderRequest,
+			onResponseCompleted: (conversationId, message) =>
+				localCompletion(
+					'bot',
+					conversationId,
+					message.id,
+					'Bot',
+					message.notification?.type === 'scheduled',
+				),
 			filename: path.join(storagePaths.home, 'bots', 'workspace.json'),
 			schedulerToolDefinitions: () =>
 				!schedulerReady
@@ -1288,6 +1496,7 @@ void app
 					.join('\n');
 			},
 			onScheduledReply: ({ title, content, failed }) =>
+				failed &&
 				showSchedulerNotification(
 					title,
 					failed ? `Scheduled task needs attention: ${content}` : content,
@@ -1314,6 +1523,7 @@ void app
 				const contents =
 					mainWindow && !mainWindow.isDestroyed() ? mainWindow.webContents : undefined;
 				if (contents && !contents.isDestroyed()) contents.send('freelm:bots-changed');
+				void refreshBotBadge();
 			},
 			remoteSteer: (participant, request, signal) =>
 				instances.botsSteer(participant, request, signal),
@@ -1420,6 +1630,7 @@ void app
 			console.error(schedulerInitializationError);
 		}
 		await bots.start().catch((error) => console.error('Could not start the bot mailbox:', error));
+		await refreshBotBadge();
 		if (schedulerReady) scheduler.start();
 		registerBridge();
 		cancelAgentRuns = registerAgentBridge({
@@ -1471,7 +1682,8 @@ function closeInstances() {
 		instances.close(),
 		agent?.service.close(),
 		search?.close(),
-	]).then(() => {
+	]).then(async () => {
+		await completionNotifications?.close();
 		managerClosed = true;
 	}));
 }

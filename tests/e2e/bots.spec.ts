@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { initialState } from '../../src/lib/state';
 import { chooseOption } from './ui-controls';
@@ -183,6 +184,7 @@ async function fixture(page: Page, empty = false) {
 						id: messageId,
 						role: 'user',
 						content: command.content,
+						attachments: command.attachments,
 						createdAt: now,
 						updatedAt: now,
 						status: 'completed',
@@ -742,6 +744,11 @@ test('thinking stays by the bot name and only reply writing shows typing dots', 
 	const inbox = page.locator('.bots-sidebar .bot-inbox-row').filter({ hasText: 'Fred' }).first();
 	// Older peers may omit activity. Pending without a phase is thinking, never writing.
 	await expect(thinking).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Stop reply', exact: true })).toHaveCount(0);
+	await expect(
+		page.getByRole('button', { name: 'Configure dictation', exact: true }),
+	).toBeEnabled();
 	await expect(inbox).toContainText('Thinking…');
 	await expect(page.locator('.bot-typing')).toHaveCount(0);
 	await expect(page.locator('.bot-message-row')).toHaveCount(1);
@@ -762,6 +769,11 @@ test('thinking stays by the bot name and only reply writing shows typing dots', 
 	await expect(page.getByLabel('Message your bot', { exact: true })).toHaveValue(
 		'An unfinished follow-up.',
 	);
+	await page.getByLabel('Message your bot', { exact: true }).fill('');
+	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+	await expect(page.getByRole('button', { name: 'Stop reply', exact: true })).toHaveCount(0);
+	await page.getByLabel('Message your bot', { exact: true }).fill('An unfinished follow-up.');
+	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeEnabled();
 	await page.screenshot({ path: '/tmp/freelm-bot-writing-dark.png' });
 	await phase({ activity: 'thinking', content: '' });
 	await expect(thinking).toBeVisible();
@@ -1202,4 +1214,273 @@ test('bot background work stays beside an enabled composer and approvals route t
 			.evaluate((element) => parseFloat(getComputedStyle(element).fontSize)),
 	).toBeGreaterThanOrEqual(13);
 	await page.screenshot({ path: '/tmp/freelm-bot-background-jobs-narrow.png' });
+});
+
+test('Bots offers the shared dictation setup without requesting microphone access', async ({
+	page,
+}) => {
+	await fixture(page);
+	await openBots(page);
+	await openFred(page);
+	await page.getByRole('button', { name: 'Configure dictation', exact: true }).click();
+	await expect(
+		page.getByText('Dictation needs a transcription model.', { exact: false }),
+	).toBeVisible();
+	await page.getByRole('button', { name: 'Dismiss dictation notice', exact: true }).click();
+	await expect(
+		page.getByRole('button', { name: 'Configure dictation', exact: true }),
+	).toBeEnabled();
+});
+
+test('busy Bots conversations accept follow-ups by Send and Enter without stopping the reply', async ({
+	page,
+}) => {
+	const { snapshots, calls } = await fixture(page);
+	const thread = snapshots.local.conversations[0];
+	thread.messages.push({
+		id: 'still-working',
+		role: 'bot',
+		author: thread.participants[0],
+		content: '',
+		createdAt: Date.now(),
+		updatedAt: Date.now(),
+		status: 'pending',
+		activity: 'writing',
+		reactions: [],
+	});
+	await openBots(page);
+	await openFred(page);
+	const composer = page.getByLabel('Message your bot', { exact: true });
+	await expect(page.getByRole('status', { name: 'Fred is typing', exact: true })).toBeVisible();
+	await expect(page.getByRole('button', { name: 'Stop reply', exact: true })).toHaveCount(0);
+	await composer.fill('First follow-up');
+	await page.getByRole('button', { name: 'Send message', exact: true }).click();
+	await expect(composer).toHaveValue('');
+	await composer.fill('Second follow-up');
+	await composer.press('Enter');
+	await expect(composer).toHaveValue('');
+	expect(
+		calls
+			.filter(({ command }) => command.type === 'send')
+			.map(({ command }) => (command.type === 'send' ? command.content : '')),
+	).toEqual(['First follow-up', 'Second follow-up']);
+	expect(calls.some(({ command }) => command.type === 'stop')).toBe(false);
+	expect(thread.messages.find(({ id }) => id === 'still-working')?.status).toBe('pending');
+	await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+});
+
+
+test('attachment-only messages preview, remove, send and restore downloadable files', async ({ page }) => {
+ const { calls } = await fixture(page);
+ await openBots(page);
+ await openFred(page);
+ const send = page.getByRole('button', { name: 'Send message', exact: true });
+ const picker = page.locator('input[type=file]').last();
+ const file = { name: 'synthetic.txt', mimeType: 'text/plain', buffer: Buffer.from('Synthetic attachment only') };
+ await picker.setInputFiles(file);
+ await expect(send).toBeEnabled();
+ await page.getByRole('button', { name: 'Remove synthetic.txt', exact: true }).click();
+ await expect(send).toBeDisabled();
+ await picker.setInputFiles(file);
+ await send.click();
+ await expect(page.getByRole('button', { name: 'Remove synthetic.txt', exact: true })).toHaveCount(0);
+ const sent = calls.find(({ command }) => command.type === 'send')?.command;
+ expect(sent?.type).toBe('send');
+ if (sent?.type === 'send') {
+   expect(sent.content).toBe('');
+   expect(sent.attachments?.[0].name).toBe('synthetic.txt');
+ }
+ await expect(page.locator('a[download="synthetic.txt"]')).toBeVisible();
+ await page.reload();
+ await openBots(page);
+ await openFred(page);
+ await expect(page.locator('a[download="synthetic.txt"]')).toBeVisible();
+ await page.screenshot({ path: '/tmp/freelm-bot-attachments-ui.png', fullPage: true });
+});
+
+
+test('synthetic image, muted audio and video display and play with safe file fallback', async ({ page }) => {
+ const { snapshots } = await fixture(page);
+ const files = [
+ { name: 'pixel.png', type: 'image/png', dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=' },
+ ...[['silence.wav', 'audio/wav', 'tests/fixtures/bot-synthetic-audio.wav'], ['blue.mp4', 'video/mp4', 'tests/fixtures/bot-synthetic-video.mp4']].map(([name,type,path]) => ({name,type,dataUrl:`data:${type};base64,${readFileSync(path).toString('base64')}`})),
+ { name:'unsupported.xyz', type:'video/x-unsupported', dataUrl:'data:video/x-unsupported;base64,AAAA' },
+ { name:'broken.mp4', type:'video/mp4', dataUrl:'data:video/mp4;base64,AAAA' },
+ ];
+ snapshots.local.conversations[0].messages[0].attachments = files;
+ await openBots(page); await openFred(page);
+ const image = page.getByRole('img', {name:'pixel.png'});
+ await expect(image).toBeVisible();
+ await expect.poll(() => image.evaluate((el: HTMLImageElement) => el.naturalWidth)).toBe(1);
+ for (const selector of ['audio','video']) {
+  const media = page.locator(selector).first();
+  await expect(media).toBeVisible();
+  await media.evaluate(async (el: HTMLMediaElement) => { el.muted=true; el.load(); await el.play(); });
+  await expect.poll(() => media.evaluate((el: HTMLMediaElement) => el.currentTime)).toBeGreaterThan(0.1);
+  await media.evaluate((el: HTMLMediaElement) => el.pause());
+ }
+ const broken = page.locator('video').last();
+ await broken.evaluate((el: HTMLMediaElement) => el.load());
+ await expect(page.getByText('Preview unavailable. Download to open this file.', { exact: true })).toBeVisible();
+ await expect(page.locator('a[download="broken.mp4"]')).toBeVisible();
+ await expect(page.locator('a[download="unsupported.xyz"]')).toBeVisible();
+ await page.screenshot({path:'/tmp/freelm-bot-media-playback.png',fullPage:true});
+});
+
+async function composerFixture(page: Page) {
+  await page.route('**/*', (route) =>
+    new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort(),
+  );
+  await page.addInitScript(() =>
+    localStorage.setItem('freelm-onboarding-v1', '{"version":1,"welcomeVersion":1}'),
+  );
+  const result = await fixture(page);
+  await openBots(page);
+  await openFred(page);
+  return result;
+}
+
+async function expectComposerGeometry(page: Page, singleLine: boolean) {
+  const geometry = await page.locator('.bots-composer').evaluate((form) => {
+    const rect = (element: Element) => {
+      const { x, y, width, height, bottom, right } = element.getBoundingClientRect();
+      return { x, y, width, height, bottom, right };
+    };
+    const attach = form.querySelector('.bots-attach')!;
+    const send = form.querySelector('.bots-send')!;
+    const mic = form.querySelector('.dictation-button')!;
+    return {
+      form: rect(form),
+      attach: rect(attach),
+      send: rect(send),
+      mic: rect(mic),
+      attachRadius: getComputedStyle(attach).borderRadius,
+      sendRadius: getComputedStyle(send).borderRadius,
+      overflow: document.documentElement.scrollWidth > innerWidth,
+    };
+  });
+  const { form, attach, send, mic } = geometry;
+  expect(attach.width).toBe(attach.height);
+  expect(send.width).toBe(attach.width);
+  expect(send.height).toBe(attach.height);
+  expect(geometry.attachRadius).toBe('50%');
+  expect(geometry.sendRadius).toBe('50%');
+  const left = attach.x - form.x;
+  const bottom = form.bottom - attach.bottom;
+  expect(left).toBeCloseTo(bottom, 1);
+  expect(form.right - send.right).toBeCloseTo(bottom, 1);
+  expect(send.y + send.height / 2).toBeCloseTo(attach.y + attach.height / 2, 1);
+  expect(mic.y + mic.height / 2).toBeCloseTo(attach.y + attach.height / 2, 1);
+  if (singleLine) expect(attach.y - form.y).toBeCloseTo(bottom, 1);
+  expect(geometry.overflow).toBe(false);
+  return geometry;
+}
+
+for (const theme of ['dark', 'light'] as const) {
+  test(`Bots composer geometry stays balanced in ${theme} with text, attachments and narrow windows`, async ({
+    page,
+  }, info) => {
+    await composerFixture(page);
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    expect(await page.locator('.bots-messages').evaluate(e => getComputedStyle(e).maskImage)).toContain('linear-gradient');
+    expect(await page.locator('.bots-composer').evaluate(e => getComputedStyle(e).maskImage)).toBe('none');
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    const input = page.getByLabel('Message your bot', { exact: true });
+    for (const width of [1440, 820]) {
+      await page.setViewportSize({ width, height: width === 820 ? 600 : 940 });
+      await input.fill('');
+      await expect(page.getByRole('button', { name: 'Send message', exact: true })).toBeDisabled();
+      await expectComposerGeometry(page, true);
+      await input.fill('One line');
+      await input.click();
+      await expectComposerGeometry(page, true);
+      await page
+        .locator('.bots-composer-area')
+        .screenshot({ path: info.outputPath(`${theme}-${width}-one-line.png`) });
+      await input.fill('First line\nSecond line\nThird line\nFourth line');
+      await expectComposerGeometry(page, false);
+      await page.locator('.bots-composer input[type=file]').setInputFiles({
+        name: 'synthetic-composer-attachment.txt',
+        mimeType: 'text/plain',
+        buffer: Buffer.from('UI fixture'),
+      });
+      await expect(page.getByLabel('Attachments to send')).toBeVisible();
+      await expectComposerGeometry(page, false);
+      await page
+        .locator('.bots-composer-area')
+        .screenshot({ path: info.outputPath(`${theme}-${width}-multiline-attachment.png`) });
+      await page
+        .getByRole('button', { name: 'Remove synthetic-composer-attachment.txt', exact: true })
+        .click();
+    }
+  });
+}
+
+test('Bots composer keeps neutral visible focus and aligned controls while a send is pending', async ({
+  page,
+}, info) => {
+  const { calls } = await composerFixture(page);
+  const input = page.getByLabel('Message your bot', { exact: true });
+  const attach = page.getByRole('button', { name: 'Add attachments', exact: true });
+  for (const theme of ['dark', 'light']) {
+    await page.evaluate((value) => {
+      document.documentElement.dataset.theme = value;
+    }, theme);
+    await input.click();
+    await expect(input).toBeFocused();
+    expect(await input.evaluate((e) => getComputedStyle(e).outlineStyle)).toBe('none');
+    const focus = await page.locator('.bots-composer').evaluate((form) => {
+      const style = getComputedStyle(form);
+      const probe = document.createElement('span');
+      probe.style.color = 'var(--muted)';
+      form.append(probe);
+      const neutral = getComputedStyle(probe).color;
+      probe.remove();
+      return { border: style.borderColor, neutral };
+    });
+    expect(focus.border).not.toBe(focus.neutral);
+    await input.press('Shift+Tab');
+    await expect(attach).toBeFocused();
+    expect(await attach.evaluate((e) => getComputedStyle(e).outlineWidth)).toBe('2px');
+    expect(await attach.evaluate((e) => getComputedStyle(e).outlineColor)).toBe(focus.neutral);
+    await page
+      .locator('.bots-composer-area')
+      .screenshot({ path: info.outputPath(`${theme}-keyboard-focus.png`) });
+    await attach.press('Tab');
+    await expect(input).toBeFocused();
+    expect(
+      await page.locator('.bots-composer').evaluate((e) => getComputedStyle(e).borderColor),
+    ).toBe(focus.neutral);
+    await input.fill('Keyboard text');
+    await input.press('Shift+Enter');
+    await expect(input).toHaveValue('Keyboard text\n');
+    await expectComposerGeometry(page, false);
+  }
+  await page.evaluate(() => {
+    const bridge = (window as any).desktop;
+    const original = bridge.botsCommand;
+    bridge.botsCommand = async (...args: any[]) => {
+      if (args.some((arg: any) => arg?.type === 'send'))
+        await new Promise<void>((resolve) => {
+          (window as any).__finishComposerSend = resolve;
+        });
+      return original(...args);
+    };
+  });
+  await input.fill('A pending fixture send');
+  const send = page.getByRole('button', { name: 'Send message', exact: true });
+  await send.click();
+  await expect(send).toBeDisabled();
+  await expect(attach).toBeDisabled();
+  await expectComposerGeometry(page, true);
+  await page
+    .locator('.bots-composer-area')
+    .screenshot({ path: info.outputPath('pending-send.png') });
+  await page.evaluate(() => (window as any).__finishComposerSend());
+  await expect(input).toHaveValue('');
+  await expect(attach).toBeEnabled();
+  expect(calls.filter(({ command }) => command.type === 'send')).toHaveLength(1);
+  await expectComposerGeometry(page, true);
 });

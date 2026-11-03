@@ -1,3 +1,4 @@
+import type { Attachment } from '../types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
 	BotCommand,
@@ -11,7 +12,7 @@ import type {
 } from '../bot-types';
 import type { BotContact } from './bots-ui-types';
 import BotsSidebar from './BotsSidebar';
-import BotsWorkspace from './BotsWorkspace';
+import BotsWorkspace, { type BotsWorkspaceProps } from './BotsWorkspace';
 import type { BotJobItem, BotJobAction } from './BotJobs';
 import { BotProfileDialog, BotGroupDialog } from './BotDialogs';
 
@@ -31,7 +32,13 @@ const conversationKey = (host: string, id: string) => JSON.stringify([host, id])
 const messageError = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
 /** Routing is independent of the open Chat/Code workspace. A bot always runs on its owning host. */
-export function useBotsWorkspace(enabled: boolean) {
+export function useBotsWorkspace(
+	enabled: boolean,
+	dictation: Pick<
+		BotsWorkspaceProps,
+		'dictation' | 'dictationConnection' | 'onDictationSettings'
+	> = {},
+) {
 	const [hosts, setHosts] = useState<HostEntry[]>([]);
 	const hostsRef = useRef(hosts);
 	hostsRef.current = hosts;
@@ -57,7 +64,16 @@ export function useBotsWorkspace(enabled: boolean) {
 		>(),
 	);
 	const pendingSends = useRef(
-		new Map<string, { id: string; content: string; replyTo?: string; mentions?: BotMention[] }>(),
+		new Map<
+			string,
+			{
+				id: string;
+				content: string;
+				replyTo?: string;
+				mentions?: BotMention[];
+				attachments?: Attachment[];
+			}
+		>(),
 	);
 	useEffect(() => {
 		mounted.current = true;
@@ -335,8 +351,20 @@ export function useBotsWorkspace(enabled: boolean) {
 		});
 	};
 	const lastRead = useRef('');
+ const [foreground, setForeground] = useState(() => document.hasFocus());
+ useEffect(() => {
+  const update = () => setForeground(document.hasFocus() && document.visibilityState === 'visible');
+  window.addEventListener('focus', update);
+  window.addEventListener('blur', update);
+  document.addEventListener('visibilitychange', update);
+  return () => {
+   window.removeEventListener('focus', update);
+   window.removeEventListener('blur', update);
+   document.removeEventListener('visibilitychange', update);
+  };
+ }, []);
 	useEffect(() => {
-		if (!enabled || !current?.connected || !conversation || document.visibilityState === 'hidden')
+		if (!enabled || !foreground || !current?.connected || !conversation || !document.hasFocus() || document.visibilityState === 'hidden')
 			return;
 		const latest = conversation.messages
 			.filter((message) => message.role === 'bot' && message.status === 'completed')
@@ -348,11 +376,11 @@ export function useBotsWorkspace(enabled: boolean) {
 		void command(targetId, {
 			type: 'update-conversation',
 			conversationId: conversation.id,
-			readAt: Date.now(),
+			readAt: latest.updatedAt,
 		}).catch(() => {
 			lastRead.current = '';
 		});
-	}, [enabled, current?.connected, conversation, targetId, command]);
+	}, [enabled, foreground, current?.connected, conversation, targetId, command]);
 	const contacts: BotContact[] = hosts.flatMap((host) =>
 		(host.snapshot?.bots ?? []).map((bot) => ({ bot, host: host.snapshot!.host })),
 	);
@@ -421,7 +449,12 @@ export function useBotsWorkspace(enabled: boolean) {
 			/* The shared error remains visible. */
 		}
 	};
-	const onSend = async (content: string, replyTo?: string, mentions?: BotMention[]) => {
+	const onSend = async (
+		content: string,
+		replyTo?: string,
+		mentions?: BotMention[],
+		attachments?: Attachment[],
+	) => {
 		if (!conversation) throw new Error('Choose a bot before sending.');
 		await flushDraft(targetId, conversation.id);
 		const key = `${targetId}:${conversation.id}`;
@@ -429,14 +462,16 @@ export function useBotsWorkspace(enabled: boolean) {
 		const pending =
 			previous?.content === content &&
 			previous.replyTo === replyTo &&
-			JSON.stringify(previous.mentions) === JSON.stringify(mentions)
+			JSON.stringify(previous.mentions) === JSON.stringify(mentions) &&
+			JSON.stringify(previous.attachments) === JSON.stringify(attachments)
 				? previous
-				: { content, replyTo, mentions, id: crypto.randomUUID() };
+				: { content, replyTo, mentions, attachments, id: crypto.randomUUID() };
 		pendingSends.current.set(key, pending);
 		await command(targetId, {
 			type: 'send',
 			conversationId: conversation.id,
 			messageId: pending.id,
+			attachments,
 			content,
 			replyTo,
 			mentions,
@@ -503,6 +538,26 @@ export function useBotsWorkspace(enabled: boolean) {
 		setEditor(null);
 	};
 	return {
+		openNotification: async (target: string, id: string) => {
+			await flushDrafts();
+			const snapshot = await window.desktop?.botsSnapshot?.(target);
+			if (!snapshot?.conversations.some((c) => c.id === id))
+				throw new Error('This Bot conversation is no longer available.');
+			setHosts((previous) => [
+				...previous.filter((h) => h.targetId !== target),
+				{
+					targetId: target,
+					name: snapshot.host.name,
+					instanceId: snapshot.host.id,
+					connected: true,
+					snapshot,
+				},
+			]);
+			setTargetId(target);
+			setConversationId(id);
+			setEditor(null);
+			setError('');
+		},
 		flushDrafts,
 		title: conversation?.title || 'Bots',
 		panel: (
@@ -535,6 +590,7 @@ export function useBotsWorkspace(enabled: boolean) {
 		content: (
 			<>
 				<BotsWorkspace
+					{...dictation}
 					key={targetId}
 					conversation={conversation}
 					jobs={jobs}

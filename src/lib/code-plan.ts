@@ -277,6 +277,7 @@ const planReadTools = new Set([
 	'scheduler.list',
 	'workflows.catalog',
 	'workflows.inspect',
+	'workflows.library_inspect',
 	'workflows.validate',
 	'workflows.read_run',
 ]);

@@ -101,7 +101,7 @@ async function hostFixture(id: string, overrides: Partial<BotHostOptions> = {}) 
 	});
 	const port = await host.start();
 	cleanups.push(async () => {
-		bots.close();
+		await bots.close();
 		await host.stop();
 	});
 	const url = `http://127.0.0.1:${port}`;

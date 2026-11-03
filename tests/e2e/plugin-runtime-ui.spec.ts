@@ -144,9 +144,11 @@ test('ZIP review precedes compile/install and enabling adds the tab without chan
 	page,
 }) => {
 	await fixture(page, true);
-	await page.getByRole('button', { name: 'Personal workspace settings', exact: true }).click();
-	const settings = page.getByRole('region', { name: 'Settings', exact: true });
-	await settings.getByRole('button', { name: 'Plugins', exact: true }).click();
+	await page
+		.getByRole('navigation', { name: 'Workspaces', exact: true })
+		.getByRole('button', { name: 'Plugins', exact: true })
+		.click();
+	const settings = page.getByRole('region', { name: 'Plugins', exact: true });
 	await settings.getByRole('button', { name: 'Install plugin', exact: true }).click();
 	await settings.getByLabel('Choose plugin ZIP', { exact: true }).setInputFiles({
 		name: 'notes.zip',
@@ -243,6 +245,6 @@ test('plugin without a connected account shows setup and never mounts its frame'
 	).toBeVisible();
 	await expect(page.locator('.plugin-workspace-frame')).toHaveCount(0);
 	await page.getByRole('button', { name: 'Open plugin settings' }).click();
-	await expect(page.getByRole('heading', { name: 'Plugins', exact: true })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Plugins', exact: true, level: 1 })).toBeVisible();
 	await expect.poll(() => page.evaluate(() => (window as any).__runtimeUI.calls.length)).toBe(0);
 });

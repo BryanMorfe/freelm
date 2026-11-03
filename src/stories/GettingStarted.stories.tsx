@@ -53,7 +53,7 @@ export const Welcome: StoryObj = {
 				<SettingsRow label="Examples and sample states" description={<code>src/stories/</code>} />
 				<SettingsRow
 					label="Restart the gallery"
-					description={<code>cd /Users/bryanmorfe/freelm &amp;&amp; npm run storybook</code>}
+					description={<code>cd ~/freelm/freelm &amp;&amp; npm run storybook</code>}
 				/>
 			</SettingsGroup>
 			<SettingsGroup

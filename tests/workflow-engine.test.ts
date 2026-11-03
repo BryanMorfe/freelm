@@ -648,3 +648,28 @@ describe('workflow scheduler', () => {
 		await status(engine, second.id, 'waiting');
 	});
 });
+
+it('emits completed-run feedback only after persistence and does not replay loaded history', async () => {
+	const root = await mkdtemp(path.join(os.tmpdir(), 'freelm-workflow-feedback-'));
+	roots.push(root);
+	const delivered: string[] = [];
+	const options = {
+		store: new WorkflowStore(root),
+		autoSchedule: false,
+		execute: async () => ({ value: 'done' }),
+		onCompleted: (run: WorkflowRun) => delivered.push(run.id),
+	};
+	const engine = new WorkflowEngine(options);
+	engines.push(engine);
+	await engine.init();
+	await engine.saveWorkflow(definition('feedback', [node('entry', 'entry')], []));
+	const run = await engine.startRun('feedback');
+	await status(engine, run.id, 'completed');
+	await vi.waitFor(() => expect(delivered).toContain(run.id));
+	await engine.dispose();
+	const prior = delivered.length;
+	const reopened = new WorkflowEngine({ ...options, store: new WorkflowStore(root) });
+	engines.push(reopened);
+	await reopened.init();
+	expect(delivered.length).toBe(prior);
+});

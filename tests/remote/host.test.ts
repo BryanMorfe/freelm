@@ -595,3 +595,15 @@ describe('authenticated loopback instance host', () => {
 		expect(status).toBe(413);
 	});
 });
+
+it('rejects adapter connections on the owning host without forwarding provider traffic', async () => {
+ let calls = 0;
+ const endpoint = await provider((_request, response) => { calls++; response.end('{}'); });
+ const fixture = await host(endpoint);
+ const snapshot = await fixture.authority.load();
+ snapshot.state!.connections[0].chatApi = 'chat/completions';
+ snapshot.state!.connections[0].providerAdapter = { pluginId: 'synthetic', accountId: 'synthetic', providerId: 'custom', credentialHeader: 'authorization' };
+ await fixture.authority.save(snapshot.state!, snapshot.revision);
+ const reply = await fixture.send('/request', wire({ path: '/chat/completions' }));
+ expect(reply.status).toBe(400); expect(await reply.text()).toContain('not supported for remote'); expect(calls).toBe(0);
+});

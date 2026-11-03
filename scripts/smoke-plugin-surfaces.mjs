@@ -206,8 +206,7 @@ try {
 			runtimeErrors.push(message.text());
 	});
 	await page.locator('.app-shell').waitFor();
-	await page.getByRole('button', { name: 'Personal workspace settings', exact: true }).click();
-	await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+	await page.getByRole('navigation', { name: 'Workspaces', exact: true }).getByRole('button', { name: 'Plugins', exact: true }).click();
 	await page.getByRole('button', { name: 'Install plugin', exact: true }).click();
 	await page.getByLabel('Choose plugin ZIP', { exact: true }).setInputFiles(followup.filename);
 	await expect(page.getByText('Review plugin', { exact: true })).toBeVisible();
@@ -224,7 +223,7 @@ try {
 		'Accountless surface plugin unexpectedly created an account.',
 	);
 	console.log('Follow-up ZIP reviewed, compiled, installed without accounts.');
-	await page.getByRole('button', { name: 'Back to workspace', exact: true }).click();
+	await page.getByRole('navigation', { name: 'Workspaces', exact: true }).getByRole('button', { name: 'Home', exact: true }).click();
 	await page.getByRole('button', { name: 'Plugin Alpha', exact: true }).click();
 	const editor = page.getByRole('textbox', { name: 'Message', exact: true });
 	const hint = page.getByRole('button', { name: 'Tab to use', exact: true });

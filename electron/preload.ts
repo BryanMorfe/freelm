@@ -154,6 +154,20 @@ const bridge: DesktopBridge = {
 		ipcRenderer.invoke('freelm:task-output-status', workspaceId, threadId),
 	taskOutputRead: (workspaceId, threadId, outputId) =>
 		ipcRenderer.invoke('freelm:task-output-read', workspaceId, threadId, outputId),
+	onNotificationOpen: (listener) => {
+		const handler = (
+			_event: Electron.IpcRendererEvent,
+			value: import('../src/notification-types').NotificationDestination,
+		) => listener(value);
+		ipcRenderer.on('freelm:open-notification', handler);
+		return () => ipcRenderer.removeListener('freelm:open-notification', handler);
+	},
+	notificationReady: () => ipcRenderer.invoke('freelm:notification-ready'),
+	onBotResponseSound: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, volume: number, kind?: 'message') => listener(volume, kind);
+		ipcRenderer.on('freelm:bot-response-sound', handler);
+		return () => ipcRenderer.removeListener('freelm:bot-response-sound', handler);
+	},
 	notifyCompletion: (input) => ipcRenderer.invoke('freelm:notify-completion', input),
 	onOpenThread: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, id: string) => listener(id);
@@ -209,6 +223,17 @@ const bridge: DesktopBridge = {
 		ipcRenderer.invoke('freelm:workspace-save', target, revision, state),
 	workspacePatch: (target, revision, patch) =>
 		ipcRenderer.invoke('freelm:workspace-patch', target, revision, patch),
+    localPairingStatus: () => ipcRenderer.invoke('freelm:local-pairing-status'),
+    localPairingStart: (options) => ipcRenderer.invoke('freelm:local-pairing-start', options),
+    localPairingInvite: () => ipcRenderer.invoke('freelm:local-pairing-invite'),
+    localPairingDecide: (requestId,keyHash,approve) => ipcRenderer.invoke('freelm:local-pairing-decide', requestId,keyHash,approve),
+    localPairingRevoke: () => ipcRenderer.invoke('freelm:local-pairing-revoke'),
+    localPairingStop: () => ipcRenderer.invoke('freelm:local-pairing-stop'),
+    mobileStatus: () => ipcRenderer.invoke('freelm:mobile-status'),
+    mobileStart: (options) => ipcRenderer.invoke('freelm:mobile-start', options),
+    mobileStop: () => ipcRenderer.invoke('freelm:mobile-stop'),
+    mobileInvite: () => ipcRenderer.invoke('freelm:mobile-invite'),
+    mobileRevoke: (id) => ipcRenderer.invoke('freelm:mobile-revoke', id),
 	instanceStatus: () => ipcRenderer.invoke('freelm:instance-status'),
 	hostStart: (options) =>
 		ipcRenderer.invoke('freelm:host-start', { name: options.name, port: options.port }),

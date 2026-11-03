@@ -301,7 +301,9 @@ try {
 		await window.desktop.workspaceSave('local', current.revision, next);
 	}, state);
 	await page.reload();
-	await page.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.getByRole('button', { name: 'Home', exact: true }).click();
+	await page.getByRole('combobox', { name: 'Conversation mode', exact: true }).click();
+	await page.getByRole('listbox').locator('[role="option"][data-value="code"]').click();
 	const modelPicker = page.getByRole('button', { name: 'Chat model', exact: true });
 	await expect(modelPicker.locator('.composer-model-name')).toHaveText('native-tool-chat');
 	await expect(modelPicker.locator('.composer-thinking-value')).toHaveText('Low');
@@ -309,8 +311,8 @@ try {
 		.getByLabel('Message', { exact: true })
 		.fill('Run the native tool check, ask which color, then generate a fixture image.');
 	await page.getByRole('button', { name: 'Send message', exact: true }).click();
-	await expect(page.locator('.working-status')).toContainText('Working for');
-	await expect(page.getByRole('status', { name: 'Generating response', exact: true })).toHaveText(
+	await expect(page.locator('.working-section-header')).toContainText('Working for');
+	await expect(page.getByRole('status', { name: 'Working on response', exact: true })).toHaveText(
 		/^Working for [1-9]\d*s$/,
 		{ timeout: 5000 },
 	);
@@ -330,22 +332,33 @@ try {
 	);
 	await expect(approval).toContainText('native-tool-check');
 	await expect(page.getByText(firstUpdate, { exact: true })).toBeVisible();
-	const activeCommand = page.locator('.active-tool-status[data-tool-id="call-command"]');
-	await expect(activeCommand).toHaveText(
+	const activeCommand = page.locator(
+		'.message-live-text .tool-call[data-tool-id="call-command"][data-activity-state="active"]',
+	);
+	await expect(activeCommand.locator('.activity-label-text')).toHaveText(
 		/^(?:Waiting for approval: )?Running printf 'native-tool-check\\n'$/,
 	);
 	await expect(activeCommand.locator('.activity-shimmer')).toHaveCount(1);
-	await expect(page.locator('.tool-call')).toHaveCount(0);
+	await expect(page.locator('.tool-debug-details')).toHaveCount(0);
 	assert.equal(requests.length, 1, 'The model must wait for approval before seeing command output');
 	await approval.getByRole('button', { name: 'Allow once', exact: true }).click();
-	const interaction = page.getByRole('dialog', { name: 'Assistant question', exact: true });
+	const interaction = page.getByRole('region', { name: 'Assistant question', exact: true });
 	await expect(interaction).toBeVisible({ timeout: 15000 });
 	await expect(interaction).toContainText(question);
 	await expect(page.getByText(secondUpdate, { exact: true })).toBeVisible();
-	await expect(page.locator('.active-tool-status[data-tool-id="call-command"]')).toHaveCount(0);
-	await expect(page.locator('.active-tool-status')).toHaveCount(1);
+	await expect(
+		page.locator(
+			'.message-live-text .tool-call[data-tool-id="call-command"][data-activity-state="active"]',
+		),
+	).toHaveCount(0);
+	await expect(
+		page.locator('.message-live-text .tool-call[data-activity-state="active"]'),
+	).toHaveCount(1);
 	await interaction.getByRole('button', { name: /^Blue/ }).click();
-	await interaction.getByRole('button', { name: 'Continue', exact: true }).click();
+	await interaction.getByRole('button', { name: 'Send', exact: true }).click();
+	await expect(approval).toContainText('Generate image');
+	assert.equal(imageRequests.length, 0, 'Image generation must wait for its own approval');
+	await approval.getByRole('button', { name: 'Allow once', exact: true }).click();
 	await expect(page.locator('.message.assistant')).toContainText(finalText, { timeout: 15000 });
 	await expect(page.getByRole('button', { name: 'Stop response' })).toHaveCount(0);
 	await expect(page.locator('.message.assistant [role="alert"]')).toHaveCount(0);
@@ -386,7 +399,6 @@ try {
 				),
 			);
 	const expectedHistory = [
-		'Working',
 		firstUpdate,
 		'call-command',
 		secondUpdate,
@@ -460,7 +472,9 @@ try {
 	assert.equal(stored.generations[0].parameters.size, '1536x864');
 	assert.equal(stored.generations[0].assets[0].url, `data:image/png;base64,${png}`);
 	await page.reload();
-	await page.getByRole('button', { name: 'Code', exact: true }).click();
+	await page.getByRole('button', { name: 'Home', exact: true }).click();
+	await page.getByRole('combobox', { name: 'Conversation mode', exact: true }).click();
+	await page.getByRole('listbox').locator('[role="option"][data-value="code"]').click();
 	await page.getByRole('button', { name: title, exact: true }).click();
 	await expect(page.locator('.tool-images img')).toBeVisible();
 	await expect(page.locator('.message.assistant')).toContainText(finalText);
@@ -476,13 +490,16 @@ try {
 	assert.deepEqual(rendererErrors, []);
 	await page.screenshot({ path: '/tmp/freelm-tools-native-gallery.png' });
 	console.log(
-		'Native Code tools smoke passed: elapsed Working for shimmer, one replaceable active tool label, completed Worked for disclosure, ordered intermediate prose/tools, real approved exec_command, user question, configured image model/preset guidance and per-call size, visible generated assets, generated title, gallery and persisted timeline across reload.',
+		'Native Code tools smoke passed: elapsed Working for header and Thinking shimmer, one replaceable active tool label, completed Worked for disclosure, ordered intermediate prose/tools, real approved exec_command, user question, configured image model/preset guidance and per-call size, visible generated assets, generated title, gallery and persisted timeline across reload.',
 	);
 } catch (error) {
 	await page?.screenshot({ path: '/tmp/freelm-tools-native-failed.png' }).catch(() => {});
 	console.error('Provider fixture errors:', providerErrors);
 	console.error('Renderer fixture errors:', rendererErrors);
 	console.error('Electron stderr tail:', stderr);
+	console.error(error);
+	// A failed fixture may leave a provider round pending. Do not hang cleanup.
+	desktop?.process().kill('SIGKILL');
 	throw error;
 } finally {
 	releaseReasoning?.();

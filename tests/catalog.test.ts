@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	assertModelCatalog,
+	standardThinkingMode,
 	assertModelSupports,
 	assertThinkingPresets,
 	availableThinkingModes,
@@ -534,4 +535,67 @@ describe('catalog validation and persisted state compatibility', () => {
 		}
 		expect(() => validateThinkingParameters(root)).toThrow('maximum depth');
 	});
+});
+
+describe('explicit Standard mode', () => {
+	it.each(['responses', 'chat/completions', 'chat'] as const)(
+		'opts into parameter omission on %s without changing existing modes',
+		(chatApi) => {
+			const definition = model();
+			const original = structuredClone(definition.thinkingModes);
+			definition.thinkingModes.push(standardThinkingMode());
+			const connection = { ...newConnection(), chatApi, catalog: [definition] };
+			expect(defaultThinkingMode(connection, definition.id)).toBe('deep');
+			expect(thinkingParameters(connection, definition.id, 'standard')).toEqual({});
+			expect(thinkingParameters(connection, definition.id)).toEqual(
+				original[0].parameters[chatApi === 'responses' ? 'responses' : 'chat'],
+			);
+			expect(definition.thinkingModes[0]).toEqual(original[0]);
+		},
+	);
+
+	it('preserves the explicit flag across persisted-state validation without migrating legacy empties', () => {
+		const state = initialState();
+		state.connections[0].catalog = [
+			model({ thinkingModes: [standardThinkingMode()], defaultThinkingMode: 'standard' }),
+		];
+		const restored = JSON.parse(JSON.stringify(state));
+		validateState(restored);
+		expect(thinkingParameters(restored.connections[0], 'custom-reasoner')).toEqual({});
+		expect(restored.connections[0].catalog![0].thinkingModes[0]).toEqual(standardThinkingMode());
+		delete restored.connections[0].catalog![0].thinkingModes[0].useProviderDefaults;
+		expect(defaultThinkingMode(restored.connections[0], 'custom-reasoner')).toBeUndefined();
+		expect(() => thinkingParameters(restored.connections[0], 'custom-reasoner')).toThrow(
+			'before sending',
+		);
+	});
+
+	it('still requires an endpoint mapping, a boolean opt-in and safe empty defaults', () => {
+		const standard = standardThinkingMode();
+		delete standard.parameters.chat;
+		const connection = {
+			...newConnection(),
+			chatApi: 'chat' as const,
+			catalog: [model({ thinkingModes: [standard] })],
+		};
+		expect(() => thinkingParameters(connection, 'custom-reasoner', 'standard')).toThrow(
+			'explicit thinking value',
+		);
+		for (const mode of [
+			{ ...standardThinkingMode(), useProviderDefaults: 'true' },
+			{ ...standardThinkingMode(), parameters: { responses: { reasoning: { effort: 'high' } } } },
+			{ ...standardThinkingMode(), parameters: { responses: { model: 'override' } } },
+		])
+			expect(() =>
+				assertModelCatalog([model({ thinkingModes: [mode as unknown as ThinkingMode] })]),
+			).toThrow();
+	});
+});
+
+it('suggests Standard mode for unconfigured models and unavailable endpoint mappings', () => {
+	const definition = model({ thinkingModes: [], defaultThinkingMode: undefined });
+	const connection = { ...newConnection(), catalog: [definition] };
+	expect(() => thinkingParameters(connection, definition.id)).toThrow('Standard mode');
+	definition.thinkingModes = [{ id: 'legacy', name: 'Legacy', parameters: { responses: {} } }];
+	expect(() => thinkingParameters(connection, definition.id, 'legacy')).toThrow('Standard mode');
 });

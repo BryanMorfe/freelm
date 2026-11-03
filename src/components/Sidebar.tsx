@@ -1,3 +1,5 @@
+import PanelHeader from './PanelHeader';
+import { IconButton } from './Button';
 import {
 	LoaderCircle,
 	ChevronDown,
@@ -416,6 +418,7 @@ export default function Sidebar(p: Props) {
 							['images', 'Images'],
 							['videos', 'Video'],
 							['audio', 'Audio'],
+							['plugins', 'Plugins'],
 						] as const
 					).map(([key, label]) => (
 						<button
@@ -488,7 +491,15 @@ export default function Sidebar(p: Props) {
 			{!p.collapsed &&
 				(p.panel ?? (
 					<div className="sidebar-panel">
-						<div className="sidebar-panel-header">
+						<PanelHeader
+							actions={
+								<IconButton
+									label={isCode ? 'Search tasks' : 'Search chats'}
+									icon={Search}
+									onClick={p.onSearch}
+								/>
+							}
+						>
 							<Select
 								className="sidebar-mode-picker"
 								aria-label="Conversation mode"
@@ -502,15 +513,7 @@ export default function Sidebar(p: Props) {
 									p.onMode(next as ConversationKind);
 								}}
 							/>
-							<button
-								className="icon-button"
-								aria-label={isCode ? 'Search tasks' : 'Search chats'}
-								title={isCode ? 'Search tasks' : 'Search chats'}
-								onClick={p.onSearch}
-							>
-								<Search size={16} aria-hidden="true" />
-							</button>
-						</div>
+						</PanelHeader>
 						<nav className="primary-nav" aria-label="Conversation actions">
 							<button onClick={p.onNewChat} title={isCode ? 'New task' : 'New chat'}>
 								<SquarePen size={17} aria-hidden="true" />

@@ -327,3 +327,9 @@ describe('main-process transport boundaries', () => {
 		expect(timeoutSpy).toHaveBeenCalledWith(1_800_000);
 	});
 });
+
+it('never sends an adapter request through the built-in transport', async () => {
+ const fetcher = vi.fn(); vi.stubGlobal('fetch', fetcher);
+ await expect(performRequest({ ...request, providerAdapterRequired: true }, () => {})).rejects.toThrow('does not support provider adapters');
+ expect(fetcher).not.toHaveBeenCalled();
+});

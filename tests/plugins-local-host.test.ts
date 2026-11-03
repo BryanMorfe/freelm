@@ -49,6 +49,10 @@ vi.mock('../electron/plugins/runtime', () => ({
 		return boundary.handler ? boundary.handler(input, callHost) : { ok: true };
 	},
 }));
+vi.mock('../electron/plugins/provider-session', () => ({ createProviderSession: () => ({ close() {}, transform: async (args: unknown) => {
+ if (!boundary.handler) throw new Error('No fixture transform');
+ return boundary.handler({ args }, async () => { throw new Error('No host API'); });
+} }) }));
 import { PluginHost, pluginToolName, type PluginHostOptions } from '../electron/plugins/host';
 const folders: string[] = [],
 	hosts: PluginHost[] = [];
@@ -559,4 +563,59 @@ describe('bot plugin action authorization and execution metadata', () => {
 		});
 		expect(boundary.invocations).toHaveLength(0);
 	});
+});
+
+describe('provider adapter host authorization', () => {
+  it.each([false, true])(
+    'requires a separate provider capability (declared=%s)',
+    async (declared) => {
+      const fetcher = vi.fn<typeof fetch>(async () => new Response('{}'));
+      const { host } = await makeHost(fetcher);
+      const spec = manifest();
+      spec.runtime.apiVersion = 2;
+      spec.contributes.providers = [
+        { id: 'custom', name: 'Custom', capabilities: { tools: false, streaming: false } },
+      ];
+      spec.permissions.capabilities = declared ? ['provider.use'] : [];
+      await install(host, spec);
+      const connected = await account(host);
+      boundary.handler = async (input) =>
+        input.args.phase === 'request'
+          ? { path: '/generate', format: 'json', body: {} }
+          : {
+              events: [
+                { type: 'text', text: 'Synthetic reply' },
+                { type: 'finish', reason: 'stop' },
+              ],
+            };
+      const run = () =>
+        host.generateWithProvider({
+          pluginId: spec.id,
+          accountId: connected.id,
+          providerId: 'custom',
+          caller: { surface: 'code' },
+          baseUrl: 'https://api.example.test',
+          request: {
+            version: 1,
+            model: 'fixture',
+            system: '',
+            messages: [],
+            tools: [],
+            maxOutputTokens: 100,
+            stream: false,
+          },
+          onEvent() {},
+          signal: new AbortController().signal,
+        });
+      await expect(run()).rejects.toThrow(/not granted/);
+      await grant(host, connected.id);
+      if (declared) await expect(run()).resolves.toMatchObject({ text: 'Synthetic reply' });
+      else {
+        await expect(run()).rejects.toThrow(/not granted/);
+        expect(fetcher).not.toHaveBeenCalled();
+      }
+      await host.command({ type: 'enable', pluginId: spec.id, enabled: false });
+      await expect(run()).rejects.toThrow(/disabled/);
+    },
+  );
 });

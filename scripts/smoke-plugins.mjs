@@ -131,8 +131,7 @@ try {
 	assert.equal(calls.length, 4);
 	assert.deepEqual(failures, []);
 	assert.deepEqual(errors, []);
-	await page.getByRole('button', { name: 'Personal workspace settings', exact: true }).click();
-	await page.getByRole('button', { name: 'Plugins', exact: true }).click();
+	await page.getByRole('navigation', { name: 'Workspaces', exact: true }).getByRole('button', { name: 'Plugins', exact: true }).click();
 	await expect(page.getByText('Fixture plugin', { exact: true }).first()).toBeVisible();
 	await page.screenshot({ path: '/tmp/freelm-plugins-native.png' });
 	const registry = await readFile(path.join(home, 'plugins', 'registry.json'), 'utf8').catch(() => '');

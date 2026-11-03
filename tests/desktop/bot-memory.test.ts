@@ -503,3 +503,10 @@ describe('durable memory extraction transport', () => {
 		).rejects.toThrow();
 	});
 });
+
+it('fails closed before provider adapter memory extraction transport', async () => {
+ const options=extractionOptions('chat/completions'), request=vi.fn();
+ options.connection.providerAdapter={pluginId:'fixture',accountId:'fixture',providerId:'custom',credentialHeader:'authorization'};
+ await expect(extractBotMemories({...options,request})).rejects.toThrow('structured output');
+ expect(request).not.toHaveBeenCalled();
+});

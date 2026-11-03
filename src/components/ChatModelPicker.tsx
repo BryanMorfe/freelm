@@ -352,7 +352,7 @@ export default function ChatModelPicker({
 									</div>
 								) : (
 									<div className="thinking-configuration-needed">
-										<p>Configure a thinking value for this model.</p>
+										<p>Choose Standard mode or configure a thinking value for this model.</p>
 										<button onClick={configure}>Configure thinking values</button>
 									</div>
 								)}
@@ -424,10 +424,15 @@ export default function ChatModelPicker({
 										<div className="chat-model-empty">
 											{term && getModelDefinition(connection, term)
 												? `This model is disabled or does not support ${task}.`
-												: 'Enter a model ID to get started.'}
+												: 'Configure a model to use it here.'}
 										</div>
 									)}
 								</div>
+								{!choices.length && (
+									<button className="picker-custom-model" onClick={configure}>
+										Configure models
+									</button>
+								)}
 								{view === 'models' && (
 									<button
 										className="picker-custom-model"

@@ -1,6 +1,14 @@
 import { userFacingError } from '../lib/user-facing-error';
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, LoaderCircle, Plus, RefreshCw, Trash2, Upload } from 'lucide-react';
+import {
+	ChevronRight,
+	ExternalLink,
+	LoaderCircle,
+	Plus,
+	RefreshCw,
+	Trash2,
+	Upload,
+} from 'lucide-react';
 import type { BotProfile } from '../bot-types';
 import type { Connection } from '../types';
 import type {
@@ -14,127 +22,24 @@ import type {
 } from '../plugin-types';
 import { SettingsGroup, SettingsRow } from './SettingsList';
 import Switch from './Switch';
-import {
-	PLUGIN_LIMITS,
-	PLUGIN_CAPABILITY_LABELS,
-	validatePluginManifest,
-} from '../lib/plugin-manifest';
+import { PLUGIN_LIMITS, validatePluginManifest } from '../lib/plugin-manifest';
 import PluginNativeSettings from './PluginNativeSettings';
+import ManifestReview from './PluginManifestReview';
+import PluginBrowser from './PluginBrowser';
+import { pluginCatalog, pluginCatalogPackage } from '../lib/plugin-catalog';
 import './plugin-settings.css';
 
 type BotChoice = Pick<BotProfile, 'id' | 'name' | 'address'>;
 interface Props {
 	readOnly?: boolean;
+	storefront?: boolean;
+	sidebarContainer?: HTMLElement | null;
 	workspaceName?: string;
 	/** Isolated previews can supply a bridge without changing the desktop global. */
 	bridge?: PluginBridge;
 	bots?: BotChoice[];
 	connections?: Connection[];
 	workspaceId?: string;
-}
-
-function ManifestReview({ manifest }: { manifest: PluginManifest }) {
-	return (
-		<dl className="plugin-manifest-review">
-			<dt>Name</dt>
-			<dd>{manifest.name}</dd>
-			<dt>Author</dt>
-			<dd>{manifest.author || 'Not supplied'}</dd>
-			<dt>Plugin ID</dt>
-			<dd>{manifest.id}</dd>
-			<dt>Version</dt>
-			<dd>{manifest.version}</dd>
-			{manifest.manifestVersion === 1 ? (
-				<>
-					<dt>MCP service</dt>
-					<dd>{manifest.mcp.url}</dd>
-				</>
-			) : (
-				<>
-					<dt>Runtime</dt>
-					<dd>FreeLM Plugin SDK v{manifest.runtime.apiVersion}</dd>
-					<dt>Network access</dt>
-					<dd>
-						{manifest.permissions.network.length ? manifest.permissions.network.join(', ') : 'None'}
-					</dd>
-					<dt>Storage</dt>
-					<dd>{manifest.permissions.storage ? 'Private storage for each account' : 'None'}</dd>
-					<dt>Tools</dt>
-					<dd>
-						{manifest.contributes.tools.length
-							? manifest.contributes.tools
-									.map((tool) => `${tool.name} — ${tool.description}`)
-									.join(' · ')
-							: 'None'}
-					</dd>
-					<dt>Tabs</dt>
-					<dd>
-						{manifest.contributes.tabs.length
-							? manifest.contributes.tabs.map((tab) => tab.title).join(', ')
-							: 'None'}
-					</dd>
-					<dt>UI actions</dt>
-					<dd>
-						{manifest.contributes.actions.length ? manifest.contributes.actions.join(', ') : 'None'}
-					</dd>
-					{manifest.runtime.apiVersion === 2 && (
-						<>
-							<dt>Surface access</dt>
-							<dd>
-								{manifest.contributes.activation?.surfaces
-									.map((surface) => (surface === 'home.chat' ? 'Chat' : 'Code'))
-									.join(', ') || 'None'}
-							</dd>
-							<dt>Capabilities</dt>
-							<dd>
-								{manifest.permissions.capabilities?.length ? (
-									<ul className="plugin-capability-list">
-										{manifest.permissions.capabilities.map((capability) => (
-											<li key={capability}>{PLUGIN_CAPABILITY_LABELS[capability]}</li>
-										))}
-									</ul>
-								) : (
-									'None'
-								)}
-							</dd>
-						</>
-					)}
-				</>
-			)}
-			<dt>Authentication</dt>
-			<dd>{manifest.auth.type === 'oauth2' ? 'OAuth 2.0' : 'No sign-in required'}</dd>
-			{manifest.auth.type === 'oauth2' && (
-				<>
-					{manifest.auth.apiOrigin && (
-						<>
-							<dt>Authenticated API</dt>
-							<dd>{manifest.auth.apiOrigin}</dd>
-						</>
-					)}
-					<dt>Client ID</dt>
-					<dd>{manifest.auth.clientId}</dd>
-					<dt>Sign-in URL</dt>
-					<dd>{manifest.auth.authorizationUrl}</dd>
-					<dt>Token URL</dt>
-					<dd>{manifest.auth.tokenUrl}</dd>
-					<dt>Requested scopes</dt>
-					<dd>{manifest.auth.scopes.length ? manifest.auth.scopes.join(', ') : 'None'}</dd>
-					{manifest.auth.resource && (
-						<>
-							<dt>Resource</dt>
-							<dd>{manifest.auth.resource}</dd>
-						</>
-					)}
-					{manifest.auth.revocationUrl && (
-						<>
-							<dt>Revocation URL</dt>
-							<dd>{manifest.auth.revocationUrl}</dd>
-						</>
-					)}
-				</>
-			)}
-		</dl>
-	);
 }
 
 function AccountPermissions({
@@ -159,7 +64,9 @@ function AccountPermissions({
 	return (
 		<details className="plugin-permissions">
 			<summary>
-				Access and tools <span>{account.access.tools.length} allowed</span>
+				<ChevronRight className="plugin-disclosure-chevron" size={16} aria-hidden="true" />
+				Access and tools{' '}
+				<span className="plugin-disclosure-meta">{account.access.tools.length} allowed</span>
 			</summary>
 			<div className="plugin-permissions-content">
 				<p className="plugin-access-notice">
@@ -245,6 +152,8 @@ function AccountPermissions({
 
 export default function PluginSettings({
 	readOnly = false,
+	storefront = false,
+	sidebarContainer,
 	workspaceName = 'Remote workspace',
 	bridge: suppliedBridge,
 	bots: suppliedBots,
@@ -257,6 +166,7 @@ export default function PluginSettings({
 		(desktop?.pluginSnapshot && desktop.pluginCommand && desktop.pluginCancelConnect
 			? (desktop as PluginBridge)
 			: undefined);
+	const [selectedId, setSelectedId] = useState<string | null>(null);
 	const [snapshot, setSnapshot] = useState<PluginSnapshot>({ plugins: [], accounts: [] });
 	const [bots, setBots] = useState<BotChoice[]>(suppliedBots || []);
 	const [loading, setLoading] = useState(true);
@@ -317,6 +227,7 @@ export default function PluginSettings({
 		setNotice('');
 		try {
 			setSnapshot(await bridge.pluginCommand(command));
+			if (command.type === 'remove' && command.pluginId === selectedId) setSelectedId(null);
 			window.dispatchEvent(new Event('freelm:plugins-changed'));
 			setNotice(message);
 			return true;
@@ -336,19 +247,26 @@ export default function PluginSettings({
 			setConnecting(false);
 		}
 	}
-	async function preparePackage(file: File) {
+	const marketplaceRevalidate = useRef<(() => Promise<void>) | undefined>(undefined);
+	async function preparePackage(
+		file: File | (() => Promise<Uint8Array>),
+		revalidate?: () => Promise<void>,
+	) {
 		if (!bridge?.pluginPreparePackage || inFlight.current || readOnly) return;
-		if (file.size > 8 * 1024 * 1024) {
+		if (typeof file !== 'function' && file.size > 8 * 1024 * 1024) {
 			setError('Plugin ZIP packages must be 8 MiB or smaller.');
 			return;
 		}
 		inFlight.current = true;
 		setBusy(true);
 		setError('');
+		marketplaceRevalidate.current = revalidate;
 		setPackageProgress('Inspecting plugin package…');
 		try {
 			const preview = await bridge.pluginPreparePackage(
-				Array.from(new Uint8Array(await file.arrayBuffer())),
+				Array.from(
+					typeof file === 'function' ? await file() : new Uint8Array(await file.arrayBuffer()),
+				),
 			);
 			setPackagePreview(preview);
 			setReview(preview.manifest);
@@ -368,6 +286,7 @@ export default function PluginSettings({
 		setError('');
 		setPackageProgress('Compiling and installing plugin…');
 		try {
+			await marketplaceRevalidate.current?.();
 			setSnapshot(await bridge.pluginInstallPackage(packagePreview.reviewId));
 			window.dispatchEvent(new Event('freelm:plugins-changed'));
 			setNotice(
@@ -403,7 +322,7 @@ export default function PluginSettings({
 		}
 	}
 
-	if (readOnly)
+	if (readOnly && !storefront)
 		return (
 			<SettingsGroup title="Plugins on this computer">
 				<SettingsRow
@@ -411,37 +330,67 @@ export default function PluginSettings({
 				/>
 			</SettingsGroup>
 		);
-	if (!bridge)
+	if (!bridge && !storefront)
 		return (
 			<SettingsGroup title="Desktop app required">
 				<SettingsRow description="Install and manage plugins in the FreeLM desktop app. Accounts and credentials are stored on their owning computer." />
 			</SettingsGroup>
 		);
+	function openImport() {
+		setImporting(true);
+		setReview(null);
+		setPackagePreview(null);
+		setError('');
+	}
+	const selectedExample = pluginCatalog.find((plugin) => plugin.id === selectedId);
 	return (
-		<div className="plugin-settings">
-			<div className="plugin-settings-intro">
-				<p>
-					Add capabilities to FreeLM and choose which surfaces and assistants can use them. Changes
-					save immediately on this computer.
-				</p>
-				<button
-					className="secondary-button compact"
-					disabled={busy || loading}
-					onClick={() => {
-						setImporting(true);
-						setReview(null);
-						setPackagePreview(null);
-						setError('');
-					}}
-				>
-					<Plus size={14} /> Install plugin
-				</button>
-			</div>
-			<p className="settings-help">
-				Install a ZIP package with its own tools, tabs, and composer extensions, or a JSON manifest
-				for an existing MCP service. Review the plugin’s network access and account permissions
-				before installing.
-			</p>
+		<PluginBrowser
+			enabled={storefront}
+			sidebarContainer={sidebarContainer}
+			snapshot={snapshot}
+			selectedId={selectedId}
+			onSelect={setSelectedId}
+			importing={importing}
+			onImport={openImport}
+			busy={busy}
+			loading={loading}
+			canInstall={!!bridge && !readOnly}
+			onReviewPackage={async (bytes, revalidate) => {
+				openImport();
+				await preparePackage(async () => bytes, revalidate);
+			}}
+			onReview={(id) => {
+				openImport();
+				void preparePackage(() => pluginCatalogPackage(id));
+			}}
+		>
+			{!storefront && (
+				<>
+					<div className="plugin-settings-intro">
+						<p>
+							Add capabilities to FreeLM and choose which surfaces and assistants can use them.
+							Changes save immediately on this computer.
+						</p>
+						<button
+							className="secondary-button compact"
+							disabled={busy || loading}
+							onClick={() => {
+								setImporting(true);
+								setReview(null);
+								setPackagePreview(null);
+								setError('');
+							}}
+						>
+							<Plus size={14} /> Install plugin
+						</button>
+					</div>
+					<p className="settings-help">
+						Install a ZIP package with its own tools, tabs, and composer extensions, or a JSON
+						manifest for an existing MCP service. Review the plugin’s network access and account
+						permissions before installing.
+					</p>
+				</>
+			)}
 
 			{error && (
 				<div className="error-note" role="alert">
@@ -466,7 +415,7 @@ export default function PluginSettings({
 					<button
 						className="secondary-button compact"
 						onClick={() =>
-							void bridge.pluginCancelConnect().catch((failure) => setError(String(failure)))
+							void bridge?.pluginCancelConnect().catch((failure) => setError(String(failure)))
 						}
 					>
 						Cancel sign-in
@@ -495,7 +444,7 @@ export default function PluginSettings({
 							</>
 						) : (
 							<>
-								{bridge.pluginPreparePackage && bridge.pluginInstallPackage && (
+								{bridge?.pluginPreparePackage && bridge.pluginInstallPackage && (
 									<>
 										<div className="plugin-settings-actions">
 											<button
@@ -605,6 +554,7 @@ export default function PluginSettings({
 													'Plugin installed. Enable it and add an account to discover its tools.',
 												)
 									) {
+										setSelectedId(review.id);
 										setImporting(false);
 										setReview(null);
 										setManifestText('');
@@ -625,9 +575,39 @@ export default function PluginSettings({
 					)}
 				</SettingsGroup>
 			)}
+			{storefront && (!bridge || readOnly) && (
+				<SettingsGroup title={readOnly ? 'Managed on the owning computer' : 'Desktop app required'}>
+					<SettingsRow
+						description={
+							readOnly
+								? `Open ${workspaceName} on its owning computer to manage plugin accounts and access. You can browse the included examples here.`
+								: 'Use the FreeLM desktop app to install plugins. You can browse the included examples here.'
+						}
+					/>
+				</SettingsGroup>
+			)}
+			{storefront &&
+				!importing &&
+				selectedExample &&
+				!snapshot.plugins.some((plugin) => plugin.manifest.id === selectedId) && (
+					<>
+						<p className="plugin-access-notice">
+							Included FreeLM example. Review installation to inspect its package. Installing does
+							not enable it or grant account tool access.
+						</p>
+						<details className="plugin-manifest-details" open>
+							<summary>
+								<ChevronRight className="plugin-disclosure-chevron" size={16} aria-hidden="true" />
+								<span>Capabilities and authorization</span>
+							</summary>
+							<ManifestReview manifest={selectedExample} />
+						</details>
+					</>
+				)}
 			{loading ? (
 				<p role="status">Loading plugins…</p>
 			) : (
+				!storefront &&
 				snapshot.plugins.length === 0 && (
 					<SettingsGroup title="Installed plugins">
 						<SettingsRow
@@ -637,273 +617,285 @@ export default function PluginSettings({
 					</SettingsGroup>
 				)
 			)}
-			{snapshot.plugins.map((plugin) => {
-				const accounts = snapshot.accounts.filter(
-					(account) => account.pluginId === plugin.manifest.id,
-				);
-				const activation =
-					plugin.manifest.manifestVersion === 2
-						? plugin.manifest.contributes.activation
-						: undefined;
-				const needsAccount =
-					plugin.manifest.auth.type !== 'none' ||
-					!activation ||
-					(plugin.manifest.manifestVersion === 2 &&
-						(plugin.manifest.contributes.tools.length > 0 ||
-							plugin.manifest.contributes.tabs.length > 0));
-				return (
-					<section
-						className="plugin-settings-entry"
-						key={plugin.manifest.id}
-						aria-label={plugin.manifest.name}
-					>
-						<SettingsGroup title={plugin.manifest.name} description={plugin.manifest.description}>
-							<SettingsRow
-								label="Enabled"
-								description={`${plugin.manifest.author || 'Author not supplied'} · ${plugin.manifest.version}`}
+			{snapshot.plugins
+				.filter((plugin) => !storefront || (!importing && plugin.manifest.id === selectedId))
+				.map((plugin) => {
+					const accounts = snapshot.accounts.filter(
+						(account) => account.pluginId === plugin.manifest.id,
+					);
+					const activation =
+						plugin.manifest.manifestVersion === 2
+							? plugin.manifest.contributes.activation
+							: undefined;
+					const needsAccount =
+						plugin.manifest.auth.type !== 'none' ||
+						!activation ||
+						(plugin.manifest.manifestVersion === 2 &&
+							(plugin.manifest.contributes.tools.length > 0 ||
+								plugin.manifest.contributes.tabs.length > 0));
+					return (
+						<section
+							className="plugin-settings-entry"
+							key={plugin.manifest.id}
+							aria-label={plugin.manifest.name}
+						>
+							<SettingsGroup
+								title={storefront ? 'Usage' : plugin.manifest.name}
+								description={storefront ? undefined : plugin.manifest.description}
 							>
-								<Switch
-									aria-label={`Enable ${plugin.manifest.name}`}
-									checked={plugin.enabled}
-									disabled={busy}
-									onChange={(enabled) =>
-										void run(
-											{ type: 'enable', pluginId: plugin.manifest.id, enabled },
-											enabled ? 'Plugin enabled.' : 'Plugin disabled.',
-										)
-									}
-								/>
-							</SettingsRow>
-							{activation && (
-								<>
-									{activation.surfaces.map((surface) => {
-										const mode = surface === 'home.chat' ? 'chat' : 'code';
-										return (
-											<SettingsRow
-												key={surface}
-												label={`Enable in ${mode === 'chat' ? 'Chat' : 'Code'}`}
-												description="Uses the capabilities reviewed at installation. Inference sends authorized text to your selected model provider."
-											>
-												<Switch
-													aria-label={`Enable ${plugin.manifest.name} in ${mode === 'chat' ? 'Chat' : 'Code'}`}
-													checked={plugin.surfaceAccess?.[mode] ?? true}
-													disabled={busy}
-													onChange={(enabled) =>
-														void run(
-															{
-																type: 'surface-access',
-																pluginId: plugin.manifest.id,
-																surfaceAccess: {
-																	chat:
-																		plugin.surfaceAccess?.chat ??
-																		activation.surfaces.includes('home.chat'),
-																	code:
-																		plugin.surfaceAccess?.code ??
-																		activation.surfaces.includes('home.code'),
-																	[mode]: enabled,
-																},
-															},
-															'Surface access updated.',
-														)
-													}
-												/>
-											</SettingsRow>
-										);
-									})}
-									{!needsAccount && (
-										<SettingsRow description="No account or sign-in is required for this extension." />
-									)}
-								</>
-							)}
-							{plugin.runtimeError && (
-								<SettingsRow layout="stacked">
-									<p className="error-note" role="alert">
-										{userFacingError(plugin.runtimeError)}
-									</p>
-								</SettingsRow>
-							)}
-							<SettingsRow layout="stacked">
-								<details className="plugin-manifest-details">
-									<summary>
-										{plugin.manifest.manifestVersion === 2
-											? 'Capabilities and authorization'
-											: 'Service and authorization'}
-									</summary>
-									<ManifestReview manifest={plugin.manifest} />
-								</details>
-							</SettingsRow>
-							{accounts.map((account) => (
-								<SettingsRow key={account.id} layout="stacked" className="plugin-account-row">
-									<div className="plugin-account-heading">
-										<div>
-											<h4>{account.label}</h4>
-											<span>
-												{account.status === 'connected' ? 'Connected' : 'Reconnect required'}
-											</span>
-										</div>
-										<div className="plugin-settings-actions">
-											<button
-												className="secondary-button compact"
-												disabled={busy || !plugin.enabled}
-												onClick={() => void connect(plugin.manifest.id, account.id, account.label)}
-											>
-												<ExternalLink size={14} /> Reconnect
-											</button>
-											<button
-												className="secondary-button compact"
-												disabled={busy}
-												onClick={() =>
-													void run(
-														{ type: 'disconnect', accountId: account.id },
-														'Account disconnected from FreeLM. Review the service’s authorized applications to revoke any remaining grant.',
-													)
-												}
-											>
-												Disconnect
-											</button>
-										</div>
-									</div>
-									{account.error && (
-										<p className="error-note" role="alert">
-											{userFacingError(account.error)}
-										</p>
-									)}
-									<div className="plugin-account-discovery">
-										<button
-											className="secondary-button compact"
-											disabled={busy || !plugin.enabled || account.status !== 'connected'}
-											onClick={() =>
-												void run(
-													{ type: 'discover', accountId: account.id },
-													'Tools refreshed. Newly discovered tools remain off.',
-												)
-											}
-										>
-											<RefreshCw size={14} /> Discover tools
-										</button>
-										<span>
-											{account.tools.length} {account.tools.length === 1 ? 'tool' : 'tools'}{' '}
-											available
-										</span>
-									</div>
-									<AccountPermissions
-										account={account}
-										bots={bots}
-										busy={busy}
-										onAccess={(access) =>
+								<SettingsRow
+									label="Enabled"
+									description={`${plugin.manifest.author || 'Author not supplied'} · ${plugin.manifest.version}`}
+								>
+									<Switch
+										aria-label={`Enable ${plugin.manifest.name}`}
+										checked={plugin.enabled}
+										disabled={busy}
+										onChange={(enabled) =>
 											void run(
-												{ type: 'access', accountId: account.id, access },
-												'Account access updated.',
+												{ type: 'enable', pluginId: plugin.manifest.id, enabled },
+												enabled ? 'Plugin enabled.' : 'Plugin disabled.',
 											)
 										}
 									/>
 								</SettingsRow>
-							))}
-							<SettingsRow layout="stacked">
-								{newAccount === plugin.manifest.id ? (
-									<form
-										className="plugin-add-account"
-										aria-label={`Add account to ${plugin.manifest.name}`}
-										onSubmit={(event) => {
-											event.preventDefault();
-											if (label.trim()) void connect(plugin.manifest.id);
-										}}
-									>
-										<label htmlFor={`plugin-account-${plugin.manifest.id}`}>Account label</label>
-										<input
-											id={`plugin-account-${plugin.manifest.id}`}
-											placeholder="Personal or work"
-											value={label}
-											maxLength={100}
-											disabled={busy}
-											onChange={(event) => setLabel(event.target.value)}
-										/>
-										<p className="settings-help">
-											This is a label you choose, not a verified email address.
-										</p>
-										<div className="plugin-settings-actions">
-											<button
-												type="button"
-												className="secondary-button compact"
-												disabled={busy}
-												onClick={() => setNewAccount(null)}
-											>
-												Cancel
-											</button>
-											<button className="primary-button compact" disabled={busy || !label.trim()}>
-												{plugin.manifest.auth.type === 'oauth2' ? 'Sign in' : 'Connect account'}
-											</button>
-										</div>
-									</form>
-								) : (
-									<div className="plugin-settings-actions">
-										{needsAccount && (
-											<button
-												className="secondary-button compact"
-												disabled={busy || !plugin.enabled}
-												onClick={() => {
-													setNewAccount(plugin.manifest.id);
-													setLabel('');
-												}}
-											>
-												<Plus size={14} /> Add account
-											</button>
+								{activation && (
+									<>
+										{activation.surfaces.map((surface) => {
+											const mode = surface === 'home.chat' ? 'chat' : 'code';
+											return (
+												<SettingsRow
+													key={surface}
+													label={`Enable in ${mode === 'chat' ? 'Chat' : 'Code'}`}
+													description="Uses the capabilities reviewed at installation. Inference sends authorized text to your selected model provider."
+												>
+													<Switch
+														aria-label={`Enable ${plugin.manifest.name} in ${mode === 'chat' ? 'Chat' : 'Code'}`}
+														checked={plugin.surfaceAccess?.[mode] ?? true}
+														disabled={busy}
+														onChange={(enabled) =>
+															void run(
+																{
+																	type: 'surface-access',
+																	pluginId: plugin.manifest.id,
+																	surfaceAccess: {
+																		chat:
+																			plugin.surfaceAccess?.chat ??
+																			activation.surfaces.includes('home.chat'),
+																		code:
+																			plugin.surfaceAccess?.code ??
+																			activation.surfaces.includes('home.code'),
+																		[mode]: enabled,
+																	},
+																},
+																'Surface access updated.',
+															)
+														}
+													/>
+												</SettingsRow>
+											);
+										})}
+										{!needsAccount && (
+											<SettingsRow description="No account or sign-in is required for this extension." />
 										)}
-										<button
-											className="secondary-button compact"
-											disabled={busy}
-											onClick={() => setRemoving(plugin.manifest.id)}
-										>
-											<Trash2 size={14} /> Remove plugin
-										</button>
-									</div>
+									</>
 								)}
-								{removing === plugin.manifest.id && (
-									<div className="plugin-remove-confirm" role="alert">
-										<p>Remove {plugin.manifest.name} and disconnect its accounts from FreeLM?</p>
+								{plugin.runtimeError && (
+									<SettingsRow layout="stacked">
+										<p className="error-note" role="alert">
+											{userFacingError(plugin.runtimeError)}
+										</p>
+									</SettingsRow>
+								)}
+								<SettingsRow layout="stacked">
+									<details className="plugin-manifest-details">
+										<summary>
+											<ChevronRight
+												className="plugin-disclosure-chevron"
+												size={16}
+												aria-hidden="true"
+											/>
+											{plugin.manifest.manifestVersion === 2
+												? 'Capabilities and authorization'
+												: 'Service and authorization'}
+										</summary>
+										<ManifestReview manifest={plugin.manifest} />
+									</details>
+								</SettingsRow>
+								{accounts.map((account) => (
+									<SettingsRow key={account.id} layout="stacked" className="plugin-account-row">
+										<div className="plugin-account-heading">
+											<div>
+												<h4>{account.label}</h4>
+												<span>
+													{account.status === 'connected' ? 'Connected' : 'Reconnect required'}
+												</span>
+											</div>
+											<div className="plugin-settings-actions">
+												<button
+													className="secondary-button compact"
+													disabled={busy || !plugin.enabled}
+													onClick={() =>
+														void connect(plugin.manifest.id, account.id, account.label)
+													}
+												>
+													<ExternalLink size={14} /> Reconnect
+												</button>
+												<button
+													className="secondary-button compact"
+													disabled={busy}
+													onClick={() =>
+														void run(
+															{ type: 'disconnect', accountId: account.id },
+															'Account disconnected from FreeLM. Review the service’s authorized applications to revoke any remaining grant.',
+														)
+													}
+												>
+													Disconnect
+												</button>
+											</div>
+										</div>
+										{account.error && (
+											<p className="error-note" role="alert">
+												{userFacingError(account.error)}
+											</p>
+										)}
+										<div className="plugin-account-discovery">
+											<button
+												className="secondary-button compact"
+												disabled={busy || !plugin.enabled || account.status !== 'connected'}
+												onClick={() =>
+													void run(
+														{ type: 'discover', accountId: account.id },
+														'Tools refreshed. Newly discovered tools remain off.',
+													)
+												}
+											>
+												<RefreshCw size={14} /> Discover tools
+											</button>
+											<span>
+												{account.tools.length} {account.tools.length === 1 ? 'tool' : 'tools'}{' '}
+												available
+											</span>
+										</div>
+										<AccountPermissions
+											account={account}
+											bots={bots}
+											busy={busy}
+											onAccess={(access) =>
+												void run(
+													{ type: 'access', accountId: account.id, access },
+													'Account access updated.',
+												)
+											}
+										/>
+									</SettingsRow>
+								))}
+								<SettingsRow layout="stacked">
+									{newAccount === plugin.manifest.id ? (
+										<form
+											className="plugin-add-account"
+											aria-label={`Add account to ${plugin.manifest.name}`}
+											onSubmit={(event) => {
+												event.preventDefault();
+												if (label.trim()) void connect(plugin.manifest.id);
+											}}
+										>
+											<label htmlFor={`plugin-account-${plugin.manifest.id}`}>Account label</label>
+											<input
+												id={`plugin-account-${plugin.manifest.id}`}
+												placeholder="Personal or work"
+												value={label}
+												maxLength={100}
+												disabled={busy}
+												onChange={(event) => setLabel(event.target.value)}
+											/>
+											<p className="settings-help">
+												This is a label you choose, not a verified email address.
+											</p>
+											<div className="plugin-settings-actions">
+												<button
+													type="button"
+													className="secondary-button compact"
+													disabled={busy}
+													onClick={() => setNewAccount(null)}
+												>
+													Cancel
+												</button>
+												<button className="primary-button compact" disabled={busy || !label.trim()}>
+													{plugin.manifest.auth.type === 'oauth2' ? 'Sign in' : 'Connect account'}
+												</button>
+											</div>
+										</form>
+									) : (
 										<div className="plugin-settings-actions">
+											{needsAccount && (
+												<button
+													className="secondary-button compact"
+													disabled={busy || !plugin.enabled}
+													onClick={() => {
+														setNewAccount(plugin.manifest.id);
+														setLabel('');
+													}}
+												>
+													<Plus size={14} /> Add account
+												</button>
+											)}
 											<button
 												className="secondary-button compact"
 												disabled={busy}
-												onClick={() => setRemoving(null)}
+												onClick={() => setRemoving(plugin.manifest.id)}
 											>
-												Keep plugin
-											</button>
-											<button
-												className="secondary-button compact danger"
-												disabled={busy}
-												onClick={async () => {
-													if (
-														await run(
-															{ type: 'remove', pluginId: plugin.manifest.id },
-															'Plugin removed.',
-														)
-													)
-														setRemoving(null);
-												}}
-											>
-												Remove and disconnect
+												<Trash2 size={14} /> Remove plugin
 											</button>
 										</div>
-									</div>
-								)}
-							</SettingsRow>
-						</SettingsGroup>
-						<PluginNativeSettings
-							plugin={plugin}
-							busy={busy}
-							connections={connections}
-							workspaceId={workspaceId}
-							onChange={(values) =>
-								void run(
-									{ type: 'settings', pluginId: plugin.manifest.id, values },
-									'Plugin settings saved.',
-								)
-							}
-						/>
-					</section>
-				);
-			})}
-		</div>
+									)}
+									{removing === plugin.manifest.id && (
+										<div className="plugin-remove-confirm" role="alert">
+											<p>Remove {plugin.manifest.name} and disconnect its accounts from FreeLM?</p>
+											<div className="plugin-settings-actions">
+												<button
+													className="secondary-button compact"
+													disabled={busy}
+													onClick={() => setRemoving(null)}
+												>
+													Keep plugin
+												</button>
+												<button
+													className="secondary-button compact danger"
+													disabled={busy}
+													onClick={async () => {
+														if (
+															await run(
+																{ type: 'remove', pluginId: plugin.manifest.id },
+																'Plugin removed.',
+															)
+														)
+															setRemoving(null);
+													}}
+												>
+													Remove and disconnect
+												</button>
+											</div>
+										</div>
+									)}
+								</SettingsRow>
+							</SettingsGroup>
+							<PluginNativeSettings
+								plugin={plugin}
+								busy={busy}
+								connections={connections}
+								workspaceId={workspaceId}
+								onChange={(values) =>
+									void run(
+										{ type: 'settings', pluginId: plugin.manifest.id, values },
+										'Plugin settings saved.',
+									)
+								}
+							/>
+						</section>
+					);
+				})}
+		</PluginBrowser>
 	);
 }

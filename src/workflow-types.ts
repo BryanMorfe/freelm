@@ -1,6 +1,7 @@
 import type { CodePermissionMode, ToolDefinition } from './agent-types';
 
 export type WorkflowNodeType =
+	| 'custom'
 	| 'entry'
 	| 'schedule'
 	| 'event'
@@ -48,6 +49,7 @@ export interface WorkflowPort {
 	required?: boolean;
 }
 export interface WorkflowNode {
+ custom?: import('./custom-node-types').CustomNodeReference;
 	id: string;
 	type: WorkflowNodeType;
 	label: string;
@@ -206,6 +208,10 @@ export interface WorkflowAsset {
 	path: string;
 }
 export interface WorkflowSnapshot {
+	definitionVersions?: Record<string, { revision: number; contentHash: string }>;
+	definitionErrors?: { file: string; message: string }[];
+ customNodeDiscovery?:{packageId:string;version:string;result:unknown};
+ customNodes?: import('./custom-node-types').InstalledCustomNode[];
 	/** This host's configured models. Credentials are never included. */
 	connections?: import('./types').Connection[];
 	projects?: import('./types').Project[];
@@ -218,7 +224,13 @@ export interface WorkflowSnapshot {
 	hostId: 'local';
 }
 export type WorkflowCommand =
-	| { type: 'save'; workflow: WorkflowDefinition }
+	| { type: 'refresh-definitions' }
+ | {type:'discover-custom-node';packageId:string;version:string;digest:string;config:Record<string,unknown>}
+ | {type:'authorize-custom-node';packageId:string;version:string;digest:string;network:string[];inference:boolean}
+ | {type:'set-custom-node-secret';packageId:string;version:string;digest:string;name:string;value:string;origin:string;header?:string;prefix?:string}
+ | { type: 'install-custom-node'; source: string }
+ | { type: 'remove-custom-node'; packageId: string; version: string }
+		| { type: 'save'; workflow: WorkflowDefinition; expectedRevision?: number; expectedContentHash?: string }
 	| { type: 'delete'; id: string }
 	| ({ type: 'attach' } & WorkflowAttachOptions)
 	| ({ type: 'update-binding'; bindingId: string } & WorkflowBindingPatch)

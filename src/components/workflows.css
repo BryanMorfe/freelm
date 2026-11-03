@@ -4,36 +4,8 @@
 	flex-direction: column;
 	height: 100%;
 }
-.workflows-sidebar .sidebar-panel-header {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding-bottom: 12px;
-}
-.workflows-sidebar .sidebar-panel-header h2 {
-	flex: 1;
-	margin: 0;
-	font-size: 18px;
-	font-weight: 600;
-}
-.workflow-search {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-	padding: 8px 10px;
-	border-radius: 8px;
-	background: var(--hover);
-	color: var(--muted);
-}
 .workflows-sidebar > .workflow-search {
-	margin: 0 12px 14px;
-}
-.workflow-search input {
-	width: 100%;
-	padding: 0;
-	border: 0;
-	background: transparent;
-	font-size: var(--font-size-ui);
+	margin: 0 var(--space-3) var(--space-3);
 }
 .workflow-sidebar-heading {
 	display: flex;
@@ -834,7 +806,6 @@
 	min-height: 0;
 	height: 100%;
 }
-.workflow-search,
 .workflow-check {
 	flex-direction: row;
 }

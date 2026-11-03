@@ -1,0 +1,31 @@
+{
+  "manifest": {
+    "id": "streaming",
+    "version": "1.0.0",
+    "title": "Streaming remote result",
+    "description": "Synthetic SSE template with explicit discovery.",
+    "inputs": [],
+    "outputs": [
+      {
+        "id": "events",
+        "label": "Events",
+        "type": "list"
+      }
+    ],
+    "fields": [
+      {
+        "key": "credential",
+        "label": "Credential reference",
+        "kind": "secret"
+      }
+    ],
+    "permissions": {
+      "network": [
+        "https://synthetic.test"
+      ]
+    },
+    "retrySafe": false,
+    "discovery": true
+  },
+  "source": "import {parseSSE} from '@freelm/custom-node-sdk';export default {async discover(ctx){return JSON.parse((await ctx.request({url:'https://synthetic.test/models',secret:{secretRef:ctx.config.credential}})).body)},async execute(input,ctx){const events=[];for await(const event of parseSSE(ctx.stream({url:'https://synthetic.test/events',secret:{secretRef:ctx.config.credential}}))){events.push(event);await ctx.progress(event.data);}return {events}}};"
+}

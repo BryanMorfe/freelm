@@ -1,6 +1,20 @@
 # Plugins
 
-Plugins provide account-connected tools to Chat, Code, and explicitly selected Bots, and can extend the Chat/Code composer through general surface APIs. Manage them in **Settings → Integrations → Plugins**. Plugin settings save immediately on the local computer, separately from workspace settings. Existing MCP servers and skills remain available in Code through their existing settings.
+Plugins provide account-connected tools to Chat, Code, and explicitly selected Bots, and can extend the Chat/Code composer through general surface APIs. Open **Plugins** in the main navigation to browse and manage them. **Settings → Integrations → Plugins → Open Plugins** links to the same page and protects unsaved settings edits. Plugin settings save immediately on the local computer, separately from workspace settings. Existing MCP servers and skills remain available in Code through their existing settings.
+
+## Browse and install
+
+Browse lists four actual repository examples: Notebook, Follow-up Prompts,
+Selected Text Tools, and Attachment Drawer. This is an included collection, not
+a hosted marketplace. Search matches names, descriptions, authors, and plugin IDs.
+Installed lists plugins on this computer. Details retain usage, account, tool,
+capability, and authorization controls.
+
+Opening an example does not execute or install it. Review install prepares its
+source through the same ZIP inspection as a file import. Only Install reviewed
+plugin completes installation. Plugins remain disabled after installation;
+account/tool access retains its explicit controls. Cancel or Back leaves the
+installation uncommitted. Custom packages use the integrated Install plugin action.
 
 ## Planned integrations
 
@@ -10,7 +24,7 @@ Plugins provide account-connected tools to Chat, Code, and explicitly selected B
 
 FreeLM supports both remote Streamable HTTP MCP integrations (JSON manifest version 1) and independently packaged TypeScript/JavaScript plugins (ZIP manifest version 2). Account integrations reuse host-owned accounts, public-client OAuth with PKCE, encrypted credentials, and explicit account/tool grants. Local packages can add model tools, custom workspace tabs, and API v2 surface extensions; their source is compiled locally at installation and runs through a restricted SDK. See [Plugin SDK](PLUGIN_SDK.md) and the [Notebook example](../examples/plugins/notebook/README.md).
 
-Import a `.freelm-plugin` or `.zip` package in Settings to review, compile, and install it. Package builds do not run npm or install scripts. A plain JSON manifest remains a remote MCP configuration and cannot install source code. Gmail operations and a public marketplace are not bundled.
+Choose **Install plugin** on the Plugins page to import a `.freelm-plugin` or `.zip` package for review, compilation, and installation. Package builds do not run npm or install scripts. A plain JSON manifest remains a remote MCP configuration and cannot install source code. Gmail operations and a public marketplace are not bundled.
 
 An application registered with the integration's authorization service is assumed to exist. Supply its public client ID and endpoints in the manifest. No confidential client secret belongs in a distributed desktop manifest. The service must support a loopback callback (`http://127.0.0.1:<ephemeral-port>/oauth/callback`) and public-client PKCE. Register the stable `/oauth/callback` path using the provider's native-app loopback configuration; the port is selected at sign-in.
 
@@ -76,8 +90,16 @@ OAuth uses a random loopback port, state validation, PKCE S256, cancellation, an
 
 Use fixture OAuth/MCP servers and isolated `FREELM_HOME` directories. Do not connect real user accounts or invoke real write tools during automated QA. Test login/cancellation, token storage and renewal, grants/revocation, persistence, unknown tools, remote denial, and both model API formats. UI fixtures cover disconnected, connected, reconnect-needed, unavailable/remote, dark/light, and narrow states.
 
-`npm run test:plugins` runs the actual desktop renderer, preload, and host against local MCP/model fixtures in a disposable profile. Set `FREELM_SMOKE_EXECUTABLE` to a packaged executable to repeat that check on a release build. OAuth and host boundary tests live in `tests/plugins.test.ts`; Settings interaction checks are in `tests/e2e/plugin-settings.spec.ts`. Storybook includes **Settings → Plugins** states.
+`npm run test:plugins` runs the actual desktop renderer, preload, and host against local MCP/model fixtures in a disposable profile. Set `FREELM_SMOKE_EXECUTABLE` to a packaged executable to repeat that check on a release build. OAuth and host boundary tests live in `tests/plugins.test.ts`; Plugin interaction checks are in `tests/e2e/plugin-settings.spec.ts` and `tests/e2e/plugin-browser.spec.ts`. The zero-install `node scripts/smoke-plugin-browser.mjs` checks the production desktop catalog, package inspection/cancel, keyboard navigation, narrow layout, and relaunch in a disposable profile. Storybook includes **Settings → Plugins** states.
 
 `npm run test:plugin-surfaces` exercises API v2 package installation, actual isolated plugin execution, native inference transport, composer transactions and cancellation, attachments, custom views, Chat/Code, and light/dark layouts. It also accepts `FREELM_SMOKE_EXECUTABLE` and uses a disposable profile with a local model fixture. `node scripts/check-plugin-runtime-cpu.mjs` verifies thread CPU accounting and runaway-code termination in Electron.
 
 Provider-specific sign-in and real Gmail operations require a concrete plugin/service and registered application configuration; fixture tests do not establish those outcomes.
+
+## Experimental provider adapters
+
+Local connections can select experimental provider adapters for Chat, Code, Bots
+and plugin inference. Adapters use sandboxed request/response translation, bounded
+JSON/SSE/NDJSON transport, and normalized text/tool events. Remote use is rejected. See
+[Provider adapters](PROVIDER_ADAPTERS.md) for the SDK contract, synthetic examples,
+permission boundaries, setup, and current feature limits.

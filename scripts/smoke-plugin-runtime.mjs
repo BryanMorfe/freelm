@@ -40,8 +40,7 @@ try {
   desktop.process().stdout?.on('data',chunk=>process.stdout.write(chunk));
   await desktop.evaluate(({webContents})=>{ for(const contents of webContents.getAllWebContents()) contents.on('will-frame-navigate', event=>console.log('Frame navigation',event.url,event.isMainFrame)); });
   await page.locator('.app-shell').waitFor();
-  await page.getByRole('button',{name:'Personal workspace settings',exact:true}).click();
-  await page.getByRole('button',{name:'Plugins',exact:true}).click();
+  await page.getByRole('navigation',{name:'Workspaces',exact:true}).getByRole('button',{name:'Plugins',exact:true}).click();
   await page.getByRole('button',{name:'Install plugin',exact:true}).click();
   await page.getByLabel('Choose plugin ZIP', {exact:true}).setInputFiles(packagePath);
   await expect(page.getByText('Review plugin',{exact:true})).toBeVisible();
@@ -56,7 +55,7 @@ try {
   const snapshot=await page.evaluate(()=>window.desktop.pluginSnapshot());
   const account=snapshot.accounts[0];
   assert.equal(account.tools.length,2); assert.deepEqual(account.access.tools,[]);
-  await page.getByRole('button',{name:'Back to workspace',exact:true}).click();
+  await page.getByRole('navigation',{name:'Workspaces',exact:true}).getByRole('button',{name:'Home',exact:true}).click();
   await page.getByRole('button',{name:'Notebook · Notebook',exact:true}).click();
   const frame=page.frameLocator('iframe[title="Notebook: Notebook"]');
   await expect(frame.getByRole('heading',{name:'Notebook'})).toBeVisible().catch(async error=>{console.log('Frames',await Promise.all(page.frames().map(async f=>({url:f.url(),html:(await f.content()).slice(0,1200)}))));throw error;});

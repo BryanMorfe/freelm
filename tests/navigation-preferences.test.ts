@@ -32,6 +32,7 @@ describe('local navigation preferences', () => {
 			'audio',
 			'bots',
 			'workflows',
+			'plugins',
 		];
 		saveNavigationPreferences({ audioMode: 'transcription' }, storage);
 		for (const mode of modes) {

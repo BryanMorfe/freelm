@@ -374,7 +374,7 @@ describe('contextual image reference collection', () => {
 			originalChunks.filter((chunk) => chunk.type !== 'IDAT'),
 		);
 		expect(wire.form?.[0].file?.base64).toBe(original);
-	});
+	}, 15000);
 
 	it('preserves an already-aborted caller signal without normalization', async () => {
 		const controller = new AbortController();

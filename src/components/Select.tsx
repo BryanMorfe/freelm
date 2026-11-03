@@ -298,7 +298,7 @@ export default function Select({
 							</Fragment>
 						))}
 					</div>,
-					document.body,
+					trigger.current?.closest('dialog') ?? document.body,
 				)}
 		</>
 	);

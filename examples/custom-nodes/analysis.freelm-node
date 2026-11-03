@@ -1,0 +1,33 @@
+{
+  "manifest": {
+    "id": "analysis",
+    "version": "1.0.0",
+    "title": "Synthetic structure analysis",
+    "description": "Synthetic fixture; no scientific prediction or external service.",
+    "inputs": [
+      {
+        "id": "structure",
+        "label": "Structure",
+        "type": "file",
+        "required": true
+      },
+      {
+        "id": "length",
+        "label": "Length",
+        "type": "number"
+      }
+    ],
+    "outputs": [
+      {
+        "id": "report",
+        "label": "Readable result",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "fields": [],
+    "permissions": {},
+    "retrySafe": true
+  },
+  "source": "export default {async execute(input,ctx){const data=JSON.parse(await ctx.artifacts.read(input.structure));return {report:'Sequence '+data.sequence+' has '+input.length+' symbols.'}}};"
+}

@@ -1,3 +1,5 @@
+import { validProviderAdapterBinding } from '../src/lib/connection-validation';
+import { validBotResponseSound } from '../src/notification-types';
 import { validComposerContext } from '../src/lib/composer-context';
 import type { AppState, WireRequest } from '../src/types';
 import { validProjectDirectories } from '../src/lib/project-directories';
@@ -284,6 +286,7 @@ export function validateState(value: unknown, previous?: AppState): asserts valu
 		!['dark', 'light', 'system'].includes(String(value.theme)) ||
 		(value.appearance !== undefined && !isAppearanceSettings(value.appearance)) ||
 		(value.debugMode !== undefined && typeof value.debugMode !== 'boolean') ||
+		(value.botResponseSound !== undefined && !validBotResponseSound(value.botResponseSound)) ||
 		(value.backgroundNotifications !== undefined &&
 			typeof value.backgroundNotifications !== 'boolean') ||
 		(value.dictation !== undefined &&
@@ -327,6 +330,7 @@ export function validateState(value: unknown, previous?: AppState): asserts valu
 				text(c.name, 512) &&
 				text(c.baseUrl, 4096) &&
 				text(c.apiKey, 16_384) &&
+				(c.providerAdapter === undefined || (validProviderAdapterBinding(c.providerAdapter) && c.chatApi === 'chat/completions')) &&
 				['responses', 'chat/completions', 'chat'].includes(String(c.chatApi)) &&
 				record(c.models) &&
 				['chat', 'images', 'videos', 'speech', 'transcription'].every((key) =>
@@ -463,6 +467,8 @@ export function validateRequest(value: unknown): asserts value is WireRequest {
 		!['GET', 'POST'].includes(String(value.method)) ||
 		(value.body !== undefined && !record(value.body)) ||
 		(value.stream !== undefined && typeof value.stream !== 'boolean') ||
+		(value.providerAdapterRequired !== undefined && typeof value.providerAdapterRequired !== 'boolean') ||
+		(value.providerCaller !== undefined && (!record(value.providerCaller) || !['chat','code','bot'].includes(String(value.providerCaller.surface)))) ||
 		(value.form !== undefined &&
 			!items(
 				value.form,

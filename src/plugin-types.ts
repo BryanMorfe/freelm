@@ -49,6 +49,7 @@ export type PluginSurface = 'home.chat' | 'home.code';
 export type PluginCapability =
 	| 'conversation.read'
 	| 'inference.text'
+	| 'provider.use'
 	| 'composer.state'
 	| 'composer.presentation'
 	| 'composer.read'
@@ -88,6 +89,7 @@ export interface PluginLocalManifest extends PluginIdentity {
 	manifestVersion: 2;
 	runtime: { apiVersion: 1 | 2; entry: string };
 	contributes: {
+		providers?: import('./provider-types').ProviderDeclaration[];
 		tools: PluginToolDeclaration[];
 		tabs: PluginTabDeclaration[];
 		actions: string[];

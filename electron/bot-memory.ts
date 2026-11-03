@@ -455,6 +455,7 @@ export async function extractBotMemories(options: {
 					max_completion_tokens: outputTokens,
 				}),
 	};
+	if (options.connection.providerAdapter) throw new Error('Automatic Bot memory extraction requires structured output, which provider adapters do not support yet.');
 	const wire: WireRequest = {
 		id: randomUUID(),
 		baseUrl: options.connection.baseUrl,

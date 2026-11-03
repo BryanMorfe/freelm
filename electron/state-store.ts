@@ -88,6 +88,7 @@ function splitState(state: AppState, keys: Record<string, string>, clone = true)
 		...(copy.memorySettings !== undefined ? { memorySettings: copy.memorySettings } : {}),
 		...(copy.personalization !== undefined ? { personalization: copy.personalization } : {}),
 		...(copy.dictation !== undefined ? { dictation: copy.dictation } : {}),
+		...(copy.botResponseSound !== undefined ? { botResponseSound: copy.botResponseSound } : {}),
 		...(copy.backgroundNotifications !== undefined
 			? { backgroundNotifications: copy.backgroundNotifications }
 			: {}),
@@ -163,6 +164,7 @@ function validatedSplitWorkspace(
 			'personalization',
 			'dictation',
 			'backgroundNotifications',
+			'botResponseSound',
 			'codeCompaction',
 			'moderation',
 			'encryptedKeys',
@@ -184,6 +186,7 @@ function validatedSplitWorkspace(
 		...(config.memorySettings !== undefined ? { memorySettings: config.memorySettings } : {}),
 		...(config.personalization !== undefined ? { personalization: config.personalization } : {}),
 		...(config.dictation !== undefined ? { dictation: config.dictation } : {}),
+		...(config.botResponseSound !== undefined ? { botResponseSound: config.botResponseSound } : {}),
 		...(config.backgroundNotifications !== undefined
 			? { backgroundNotifications: config.backgroundNotifications }
 			: {}),

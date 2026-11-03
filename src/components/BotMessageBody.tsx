@@ -73,7 +73,7 @@ export default memo(function BotMessageBody({ text }: { text: string }) {
 				data-collapsed={collapsible && !expanded ? 'true' : undefined}
 			>
 				<div className="bot-message-body-markdown" ref={markdownRef}>
-					<MessageMarkdown text={text} />
+					<MessageMarkdown text={text} defer={false} />
 				</div>
 			</div>
 			{collapsible && (

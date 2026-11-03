@@ -237,3 +237,70 @@ describe('bot provider activity stream', () => {
 		expect(phases).toEqual(['writing', 'thinking']);
 	});
 });
+
+describe('intermediate message typing', () => {
+	it('recognizes a split Chat tool name without exposing partial arguments', () => {
+		const activity: BotReplyActivity[] = [];
+		const stream = createBotProviderStream(false, (value) => activity.push(value));
+		const push = (index: number, name: string, args = '') =>
+			stream.push(
+				frame({
+					choices: [
+						{
+							index: 0,
+							delta: {
+								tool_calls: [
+									{
+										index,
+										id: `call-${index}`,
+										type: 'function',
+										function: { name, arguments: args },
+									},
+								],
+							},
+						},
+					],
+				}),
+			);
+		push(0, 'bot_send_');
+		expect(activity.at(-1)).toBe('thinking');
+		push(0, 'message', '{"text":');
+		expect(activity.at(-1)).toBe('writing');
+		push(1, 'threads_list', '{}');
+		expect(activity.at(-1)).toBe('writing');
+		push(0, '', '"Checking."}');
+		stream.push(frame({ choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }] }));
+		const result = stream.finish(response);
+		expect(result.text).toBe('');
+		expect(result.calls[0]).toMatchObject({
+			name: 'bot_send_message',
+			arguments: '{"text":"Checking."}',
+		});
+	});
+	it('shows typing during Responses arguments and rejects a truncated stream', () => {
+		const activity: BotReplyActivity[] = [];
+		const stream = createBotProviderStream(true, (value) => activity.push(value));
+		stream.push(
+			frame({
+				type: 'response.output_item.added',
+				output_index: 0,
+				item: {
+					type: 'function_call',
+					id: 'item',
+					call_id: 'call',
+					name: 'bot_send_message',
+					arguments: '',
+				},
+			}),
+		);
+		stream.push(
+			frame({
+				type: 'response.function_call_arguments.delta',
+				item_id: 'item',
+				delta: '{"text":"Check',
+			}),
+		);
+		expect(activity).toEqual(['writing', 'writing']);
+		expect(() => stream.finish(response)).toThrow('before completion');
+	});
+});

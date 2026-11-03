@@ -1,7 +1,8 @@
+import SearchField from './SearchField';
 import { userFacingError } from '../lib/user-facing-error';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, Search, X } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import type { BotMemory, BotParticipant, BotProfile, BotProfileInput } from '../bot-types';
 import type { Connection } from '../types';
 import { botAddress, MAX_BOT_MEMORY_CONTENT } from '../lib/bots';
@@ -615,15 +616,13 @@ export function BotGroupDialog(p: BotGroupDialogProps) {
 				Choose at least two bots. Each bot keeps its identity on its own host; this host stores the
 				group conversation.
 			</p>
-			<label className="bots-search">
-				<Search size={15} />
-				<input
-					aria-label="Search bot addresses"
-					placeholder="Name or fred@freelm"
-					value={search}
-					onChange={(event) => setSearch(event.target.value)}
-				/>
-			</label>
+			<SearchField
+				className="bots-search"
+				label="Search bot addresses"
+				placeholder="Name or fred@freelm"
+				value={search}
+				onValueChange={setSearch}
+			/>
 			<div className="bots-group-list">
 				{contacts.map((contact) => {
 					const key = botContactKey(contact);

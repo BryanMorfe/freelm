@@ -9,7 +9,7 @@ import type {
 export interface WorkflowField {
 	key: string;
 	label: string;
-	kind?: 'text' | 'textarea' | 'number' | 'json' | 'select' | 'boolean' | 'lines';
+	kind?: 'text' | 'textarea' | 'number' | 'json' | 'select' | 'boolean' | 'lines' | 'secret';
 	description?: string;
 	placeholder?: string;
 	options?: { value: string; label: string }[];
@@ -797,6 +797,24 @@ export const WORKFLOW_CATALOG: WorkflowNodeDefinition[] = [
 export const WORKFLOW_NODE_MAP = Object.fromEntries(
 	WORKFLOW_CATALOG.map((item) => [item.type, item]),
 ) as Record<WorkflowNodeType, WorkflowNodeDefinition>;
+const unavailableDefinition: WorkflowNodeDefinition = {
+	type: 'custom',
+	title: 'Custom node',
+	description: 'Custom node package unavailable.',
+	category: 'Actions',
+	color: '#91adb8',
+	inputs: [],
+	outputs: [],
+	defaults: {},
+	fields: [],
+};
+export function definitionForNode(node: WorkflowNode): WorkflowNodeDefinition {
+	if (node.type === 'custom' && node.custom?.definition) {
+		return { ...unavailableDefinition, ...node.custom.definition, type: 'custom' };
+	}
+	return WORKFLOW_NODE_MAP[node.type] ?? unavailableDefinition;
+}
+
 export const WORKFLOW_PORT_COLORS: Record<WorkflowDataType, string> = {
 	any: '#9b9fa6',
 	text: '#9a9dce',

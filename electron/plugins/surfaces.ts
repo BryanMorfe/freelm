@@ -282,7 +282,7 @@ export class PluginSurfaceHost {
 			const connection = await this.options.connection(model.hostId, model.connectionId);
 			assertCurrent();
 			if (!connection) throw new Error('The selected plugin inference connection is unavailable.');
-			const result = await generatePluginText(connection, model, { ...args, system: args.system ?? '' }, signal, this.options.execute);
+			const result = await generatePluginText(connection, model, { ...args, system: args.system ?? '' }, signal, (hostId, wire, chunk, abort) => this.options.execute(hostId, { ...wire, providerCaller: { surface: session.binding.surface.mode } }, chunk, abort));
 			assertCurrent(); return result;
 		} finally { session.inferenceCount--; if (acquired) this.inferences--; }
 	}

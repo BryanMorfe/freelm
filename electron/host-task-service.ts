@@ -863,6 +863,8 @@ export class HostTaskService {
 				id: randomUUID(),
 				workspaceId: 'local',
 				connectionId: connection.id,
+				providerCaller: input.providerCaller ?? { surface: 'chat' },
+				...(connection.providerAdapter ? { providerAdapterRequired: true } : {}),
 				baseUrl: connection.baseUrl,
 				apiKey: connection.apiKey,
 			},

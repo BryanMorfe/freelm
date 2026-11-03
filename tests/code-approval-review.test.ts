@@ -631,3 +631,11 @@ describe('independent Code action review', () => {
 		expect(() => parseCodeApproval('Sure! {"approved":true,"reason":"approved"}')).toThrow();
 	});
 });
+
+it('fails closed before transport for provider adapter automatic review', async () => {
+ const { state, thread, action } = fixture('chat/completions');
+ state.connections[0].providerAdapter = { pluginId:'fixture',accountId:'fixture',providerId:'custom',credentialHeader:'authorization' };
+ const decision = await reviewCodeAction(state,thread,action,new AbortController().signal);
+ expect(decision).toMatchObject({approved:false,reviewError:{code:'configuration',attempts:0}});
+ expect(decision.reason).toContain('Ask permission mode'); expect(performRequest).not.toHaveBeenCalled();
+});

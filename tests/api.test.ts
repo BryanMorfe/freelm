@@ -1,3 +1,4 @@
+import { standardThinkingMode } from '../src/lib/catalog';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
 	createSSEParser,
@@ -91,6 +92,38 @@ afterEach(() => {
 });
 
 describe('SSE and chat contract', () => {
+	it.each(['responses', 'chat/completions', 'chat'] as const)(
+		'sends Standard requests on %s without thinking parameters or configuration flags',
+		async (chatApi) => {
+			const configured = structuredClone(connection);
+			configured.chatApi = chatApi;
+			configured.catalog = [
+				{ ...configured.catalog![0], id: 'model', thinkingModes: [standardThinkingMode()] },
+			];
+			const { desktop } = bridge(() =>
+				json(
+					chatApi === 'responses'
+						? { output_text: 'Standard answer' }
+						: { choices: [{ message: { content: 'Standard answer' }, finish_reason: 'stop' }] },
+				),
+			);
+			await streamChat(
+				configured,
+				'model',
+				messages,
+				'Preserve instructions',
+				vi.fn(),
+				undefined,
+				'standard',
+			);
+			const body = desktop.request.mock.calls[0][0].body!;
+			expect(body).toMatchObject({ model: 'model', stream: true });
+			for (const key of ['reasoning', 'reasoning_effort', 'useProviderDefaults', 'parameters'])
+				expect(body).not.toHaveProperty(key);
+			expect(JSON.stringify(body)).toContain('Preserve instructions');
+		},
+	);
+
 	it.each(['responses', 'chat/completions', 'chat'] as const)(
 		'preserves selected reply context and the separate user prompt in %s requests',
 		async (chatApi) => {
@@ -292,6 +325,78 @@ describe('SSE and chat contract', () => {
 		const onDelta = vi.fn();
 		await streamChat(connection, 'model', messages, '', onDelta);
 		expect(onDelta).toHaveBeenCalledWith('Nonstream response');
+	});
+
+	it.each(['chat/completions', 'chat'] as const)(
+		'rejects unsuccessful JSON completion reasons on %s without emitting a success',
+		async (chatApi) => {
+			for (const [finish_reason, expected] of [
+				['length', 'The response reached the provider output limit.'],
+				['content_filter', 'The provider stopped this response with a content filter.'],
+			]) {
+				bridge(() =>
+					json({ choices: [{ message: { content: 'Partial answer' }, finish_reason }] }),
+				);
+				const onDelta = vi.fn();
+				await expect(
+					streamChat({ ...connection, chatApi }, 'model', messages, '', onDelta),
+				).rejects.toThrow(expected);
+				expect(onDelta).not.toHaveBeenCalled();
+			}
+		},
+	);
+
+	it.each(['responses', 'chat/completions', 'chat'] as const)(
+		'accepts successful JSON text and refusals on %s',
+		async (chatApi) => {
+			for (const refusal of [false, true]) {
+				const text = refusal ? 'I cannot help with that.' : 'Complete answer';
+				bridge(() =>
+					json(
+						chatApi === 'responses'
+							? {
+									status: 'completed',
+									output: [
+										{
+											type: 'message',
+											content: [
+												refusal
+													? { type: 'refusal', refusal: text }
+													: { type: 'output_text', text },
+											],
+										},
+									],
+								}
+							: {
+									choices: [
+										{
+											message: refusal ? { refusal: text } : { content: text },
+											finish_reason: 'stop',
+										},
+									],
+								},
+					),
+				);
+				const onDelta = vi.fn();
+				await streamChat({ ...connection, chatApi }, 'model', messages, '', onDelta);
+				expect(onDelta).toHaveBeenCalledExactlyOnceWith(text);
+			}
+		},
+	);
+
+	it('reports the reason for an incomplete JSON Responses result without emitting a success', async () => {
+		bridge(() =>
+			json({
+				status: 'incomplete',
+				incomplete_details: { reason: 'max_output_tokens' },
+				output_text: 'Partial answer',
+			}),
+		);
+		const onDelta = vi.fn();
+		await expect(streamChat(connection, 'model', messages, '', onDelta)).rejects.toThrow(
+			'The response was incomplete: max_output_tokens.',
+		);
+		expect(onDelta).not.toHaveBeenCalled();
 	});
 
 	it('surfaces error events and preserves already emitted partial text', async () => {

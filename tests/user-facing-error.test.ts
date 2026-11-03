@@ -93,6 +93,34 @@ describe('user-facing errors', () => {
 			'The selected model is not defined.',
 		);
 	});
+	it.each([
+		['The response was incomplete: max_output_tokens.', 'output limit'],
+		['The provider stopped this response: length.', 'output limit'],
+		[
+			'The response reached the provider output limit. Stream details: 23 characters, 2 events.',
+			'output limit',
+		],
+		['The response was incomplete: content_filter.', 'filtered'],
+		['The provider stopped this response: content_filter.', 'filtered'],
+		['The provider stopped this response with a content filter.', 'filtered'],
+	])(
+		'explains provider stop %s with recovery guidance while retaining raw diagnostics',
+		(message, explanation) => {
+			const raw = new Error(message);
+			const formatted = userFacingError(raw);
+			expect(formatted).toContain(explanation);
+			expect(formatted).toContain('Try');
+			expect(formatted).not.toContain('Stream details');
+			expect(raw.message).toBe(message);
+			expect(userFacingError(formatted)).toBe(formatted);
+		},
+	);
+
+	it('preserves unfamiliar incomplete reasons for diagnosis', () => {
+		const message = 'The response was incomplete: custom_provider_reason.';
+		expect(userFacingError(message)).toBe(message);
+	});
+
 	it('is idempotent for already formatted errors', () => {
 		const formatted = userFacingError(
 			"Error invoking remote method 'freelm:tool-execute': Error: The server is busy.",

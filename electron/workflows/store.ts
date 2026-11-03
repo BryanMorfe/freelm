@@ -75,6 +75,21 @@ export class WorkflowStore {
 	listWorkflows(): Promise<WorkflowDefinition[]> {
 		return this.list('definitions');
 	}
+	/** Read-only scan. One damaged definition must not hide unrelated valid records. */
+	async readDefinitions(): Promise<{ records: { file: string; value: unknown }[]; errors: { file: string; message: string }[] }> {
+		const folder = path.join(this.directory, 'definitions');
+		const names = (await readdir(folder)).filter(name => name.endsWith('.json')).sort();
+		const records: { file: string; value: unknown }[] = [], errors: { file: string; message: string }[] = [];
+		for (const file of names) {
+			try { records.push({ file, value: JSON.parse(await readFile(path.join(folder, file), 'utf8')) }); }
+			catch (error) { errors.push({ file, message: String(error) }); }
+		}
+		return { records, errors };
+	}
+	async readDefinition(id: string): Promise<WorkflowDefinition | undefined> {
+		try { return JSON.parse(await readFile(path.join(this.directory, 'definitions', `${safeId(id)}.json`), 'utf8')); }
+		catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error; }
+	}
 	listBindings(): Promise<WorkflowProjectBinding[]> {
 		return this.list('bindings');
 	}

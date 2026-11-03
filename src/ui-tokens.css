@@ -1,0 +1,36 @@
+/* FreeLM desktop values, derived from Home. These are not Apple HIG specifications. */
+:root {
+	--font-family-ui: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+	--font-size-ui: 13px;
+	--line-height-ui: 18px;
+	--font-size-panel-title: 16px;
+	--line-height-panel-title: 20px;
+	--font-weight-panel-title: 550;
+	--tracking-panel-title: -0.25px;
+	--font-size-caption: 12px;
+	--line-height-caption: 16px;
+	--space-1: 4px;
+	--space-2: 8px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-6: 24px;
+	--space-8: 32px;
+	--control-height: 36px;
+	--control-height-compact: 30px;
+	--control-size-icon: 32px;
+	--radius-control: 9px;
+	--radius-icon: 7px;
+	--panel-header-height: 48px;
+	--panel-title-height: 34px;
+	--panel-header-leading: 8px;
+	--panel-title-inset: 9px;
+	--panel-header-trailing: 13px;
+	--motion-feedback: 150ms;
+	--motion-enter: 240ms;
+	--motion-ease: ease;
+	--motion-ease-enter: cubic-bezier(0.22, 0.7, 0.25, 1);
+	--focus-ring: #78a9ff;
+}
+:root[data-theme='light'] {
+	--focus-ring: #005fcc;
+}

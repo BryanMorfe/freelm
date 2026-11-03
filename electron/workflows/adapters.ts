@@ -166,6 +166,7 @@ export function createWorkflowAdapters(deps: WorkflowAdapterDependencies) {
 				id: randomUUID(),
 				workspaceId: 'local',
 				connectionId: c.id,
+				...(c.providerAdapter ? { providerAdapterRequired: true } : {}),
 				baseUrl: c.baseUrl,
 				apiKey: c.apiKey,
 			},

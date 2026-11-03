@@ -1,3 +1,4 @@
+import { validateNodeManifest } from '../custom-nodes/manifest';
 import { createHash, randomUUID } from 'node:crypto';
 import type { CodePermissionMode } from '../../src/agent-types';
 import { normalizeWorkflowInputs, validateWorkflowRequest } from '../../src/lib/workflow-inputs';
@@ -21,6 +22,7 @@ import type {
 	WorkflowTrigger,
 } from '../../src/workflow-types';
 import { WorkflowStore } from './store';
+import { definitionHash, type DefinitionBase } from './definition-version';
 import { WorkflowScheduler, scheduleConfig, validateSchedule } from './scheduler';
 
 const TERMINAL = new Set(['completed', 'failed', 'cancelled', 'skipped', 'interrupted']);
@@ -45,6 +47,7 @@ function authorityFields(node: WorkflowNode): string[] {
 				: AUTHORITY_FIELDS;
 }
 const NODE_TYPES = new Set([
+ 'custom',
 	'entry',
 	'schedule',
 	'event',
@@ -134,7 +137,18 @@ export function validateWorkflowCommand(input: unknown): asserts input is Workfl
 		if (!validId(value)) throw new Error('Invalid workflow identifier.');
 	};
 	switch (input.type) {
+		case 'refresh-definitions': break;
+ case 'discover-custom-node':
+ case 'authorize-custom-node':
+ case 'set-custom-node-secret':
+ if(typeof input.packageId!=='string'||typeof input.version!=='string'||typeof input.digest!=='string')throw new Error('Invalid custom node identity.');break;
+ case 'install-custom-node':
+ if(typeof input.source!=='string'||input.source.length>1024*1024)throw new Error('Invalid node package.');break;
+ case 'remove-custom-node':
+ if(typeof input.packageId!=='string'||typeof input.version!=='string')throw new Error('Invalid node identity.');break;
 		case 'save':
+			if (input.expectedRevision !== undefined && (!Number.isSafeInteger(input.expectedRevision) || Number(input.expectedRevision) < 0)) throw new Error('Invalid expected definition revision.');
+			if (input.expectedContentHash !== undefined && (typeof input.expectedContentHash !== 'string' || !/^[a-f0-9]{64}$/.test(input.expectedContentHash))) throw new Error('Invalid expected definition content hash.');
 			if (!isRecord(input.workflow)) throw new Error('Invalid workflow definition.');
 			validateWorkflow(input.workflow as unknown as WorkflowDefinition);
 			break;
@@ -396,6 +410,7 @@ export function validateWorkflow(workflow: WorkflowDefinition): void {
 		ids.add(node.id);
 		incoming.set(node.id, 0);
 		outgoing.set(node.id, []);
+		if(node.type==='custom'){ if(!node.custom||typeof node.custom.digest!=='string'||!/^[a-f0-9]{64}$/.test(node.custom.digest))throw new Error('Invalid custom node reference.');validateNodeManifest(node.custom.definition);if(node.custom.packageId!==node.custom.definition.id||node.custom.version!==node.custom.definition.version)throw new Error('Custom node identity mismatch.');}
 		if (node.type === 'schedule') validateSchedule(scheduleConfig(node));
 		for (const key of authorityFields(node)) {
 			const value = node.config[key];
@@ -450,6 +465,7 @@ export interface WorkflowEngineOptions {
 	store: WorkflowStore;
 	execute: WorkflowNodeExecutor;
 	onChange?: () => void;
+	onCompleted?: (run: WorkflowRun) => void;
 	onError?: (error: unknown) => void;
 	maxConcurrentRuns?: number;
 	/** Host startup gate. Queued runs stay durable until renderer-dependent services are ready. */
@@ -463,6 +479,8 @@ export interface WorkflowEngineOptions {
 	) => Promise<WorkflowProjectContext | undefined> | WorkflowProjectContext | undefined;
 }
 export interface StartWorkflowOptions {
+	/** Host-owned automatic-trigger generation, never accepted from tool arguments. */
+	expectedDefinitionHash?: string;
 	inputs?: Record<string, unknown>;
 	trigger?: WorkflowTrigger;
 	parentRunId?: string;
@@ -478,6 +496,8 @@ export class WorkflowEngine {
 	readonly store: WorkflowStore;
 	readonly scheduler: WorkflowScheduler;
 	private workflows = new Map<string, WorkflowDefinition>();
+	private definitionSerial: Promise<unknown> = Promise.resolve();
+	private definitionErrors: { file: string; message: string }[] = [];
 	private runs = new Map<string, WorkflowRun>();
 	private bindings = new Map<string, WorkflowProjectBinding>();
 	private bindingSerial: Promise<unknown> = Promise.resolve();
@@ -487,6 +507,7 @@ export class WorkflowEngine {
 	private queue: string[] = [];
 	private watchers: FSWatcher[] = [];
 	private eventTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private eventTimerDefinitions = new Map<string, { workflowId: string; hash: string }>();
 	private timer?: ReturnType<typeof setInterval>;
 	private closed = false;
 	private initialized = false;
@@ -497,7 +518,7 @@ export class WorkflowEngine {
 			store: this.store,
 			workflows: () => [...this.workflows.values()],
 			runs: () => [...this.runs.values()],
-			start: (id, args) => this.startRun(id, args),
+			start: (id, args, definition, definitions) => this.startRun(id, { ...args, expectedDefinitionHash: this.triggerDefinitionHash(definition, new Map(definitions.map(graph => [graph.id, graph]))) }),
 			now: options.now,
 			onError: (error) => options.onError?.(error),
 		});
@@ -508,15 +529,11 @@ export class WorkflowEngine {
 	async init(): Promise<void> {
 		if (this.initialized) return;
 		await this.store.init();
-		const [workflows, runs, bindings] = await Promise.all([
-			this.store.listWorkflows(),
+		const [_, runs, bindings] = await Promise.all([
+			this.refreshDefinitions(),
 			this.store.listRuns(),
 			this.store.listBindings(),
 		]);
-		for (const workflow of workflows) {
-			validateWorkflow(workflow);
-			this.workflows.set(workflow.id, workflow);
-		}
 		for (const binding of bindings) {
 			this.validateBinding(binding);
 			this.bindings.set(binding.id, binding);
@@ -587,6 +604,8 @@ export class WorkflowEngine {
 		return structuredClone({
 			version: 1,
 			hostId: 'local',
+			definitionVersions: Object.fromEntries([...this.workflows.values()].map(item => [item.id, { revision: item.revision ?? 0, contentHash: definitionHash(item) }])),
+			definitionErrors: this.definitionErrors,
 			bindings: [...this.bindings.values()].sort((a, b) => b.updatedAt - a.updatedAt),
 			workflows: [...this.workflows.values()].sort((a, b) => b.updatedAt - a.updatedAt),
 			runs: [...this.runs.values()]
@@ -620,6 +639,13 @@ export class WorkflowEngine {
 			throw new WorkflowPersistenceError(`Could not checkpoint workflow: ${message(error)}`);
 		}
 		this.changed();
+		if (run.status === 'completed' && !run.parentRunId) {
+			try {
+				await this.options.onCompleted?.(structuredClone(run));
+			} catch (error) {
+				this.report(error);
+			}
+		}
 	}
 	getWorkflow(id: string): WorkflowDefinition | undefined {
 		return structuredClone(this.workflows.get(id));
@@ -689,6 +715,7 @@ export class WorkflowEngine {
 			throw new Error('Project directories are invalid.');
 		return structuredClone(project);
 	}
+	async assertLibraryProject(id: string): Promise<void> { await this.project(id); }
 	private dependencies(
 		workflow: WorkflowDefinition,
 		available: Map<string, WorkflowDefinition>,
@@ -844,30 +871,99 @@ export class WorkflowEngine {
 			this.changed();
 		});
 	}
-	async saveWorkflow(workflow: WorkflowDefinition): Promise<WorkflowDefinition> {
-		validateWorkflow(workflow);
-		const saved = structuredClone({
-			...workflow,
-			revision: (this.workflows.get(workflow.id)?.revision ?? 0) + 1,
-			updatedAt: this.now(),
+	private triggerDefinitionHash(graph: WorkflowDefinition, available = this.workflows): string {
+		return definitionHash({ graph, dependencies: this.dependencies(graph, available) });
+	}
+	private mutateDefinitions<T>(action: () => Promise<T>): Promise<T> {
+		const result = this.definitionSerial.catch(() => undefined).then(() => {
+			if (this.closed) throw new Error('Workflow engine is closed.');
+			return action();
 		});
-		await this.store.saveWorkflow(saved);
-		this.workflows.set(saved.id, saved);
-		this.refreshWatchers();
-		this.changed();
-		return structuredClone(saved);
+		this.definitionSerial = result;
+		return result;
+	}
+	/** Explicit read-only disk reconciliation; never called by a directory watcher. */
+	refreshDefinitions(): Promise<void> {
+		return this.mutateDefinitions(async () => {
+			const scan = await this.store.readDefinitions();
+			const errors = [...scan.errors];
+			const bad = new Set(scan.errors.map(item => item.file.replace(/\.json$/, '')));
+			const next = new Map<string, WorkflowDefinition>();
+			for (const { file, value } of scan.records) {
+				try {
+					validateWorkflow(value as WorkflowDefinition);
+					const graph = value as WorkflowDefinition;
+					if (file !== `${graph.id}.json` || next.has(graph.id)) throw new Error('Definition filename and unique graph identifier must match.');
+					next.set(graph.id, graph);
+				} catch (error) { bad.add(file.replace(/\.json$/, '')); if (isRecord(value) && validId(value.id)) bad.add(String(value.id)); errors.push({ file, message: String(error) }); }
+			}
+			// Hold the affected dependency component at its last valid generation.
+			const links = new Map<string, Set<string>>();
+			for (const graph of [...this.workflows.values(), ...next.values()]) {
+				if (!links.has(graph.id)) links.set(graph.id, new Set());
+				for (const node of graph.nodes) if (['subworkflow', 'loop', 'repeat', 'foreach'].includes(node.type)) {
+					const child = String(node.config.workflowId);
+					links.get(graph.id)!.add(child);
+					if (!links.has(child)) links.set(child, new Set());
+					links.get(child)!.add(graph.id);
+				}
+			}
+			for (const graph of next.values()) {
+				try { this.dependencies(graph, next); }
+				catch (error) { bad.add(graph.id); errors.push({ file: `${graph.id}.json`, message: String(error) }); }
+			}
+			const held = new Set(bad), visit = [...bad];
+			for (let index = 0; index < visit.length; index++) for (const id of links.get(visit[index]) ?? []) {
+				if (!held.has(id)) { held.add(id); visit.push(id); }
+			}
+			for (const id of held) { const old = this.workflows.get(id); if (old) next.set(id, old); else next.delete(id); }
+			const changed = next.size !== this.workflows.size || [...next].some(([id, graph]) => !this.workflows.has(id) || definitionHash(graph) !== definitionHash(this.workflows.get(id)!));
+			const diagnosticsChanged = JSON.stringify(errors) !== JSON.stringify(this.definitionErrors);
+			this.definitionErrors = errors;
+			if (changed) { this.workflows = next; this.refreshWatchers(); }
+			if (this.initialized && (changed || diagnosticsChanged)) this.changed();
+		});
+	}
+	saveWorkflow(workflow: WorkflowDefinition, expected: DefinitionBase = {}, validateDependencies = false): Promise<WorkflowDefinition> {
+		validateWorkflow(workflow);
+		const captured = structuredClone(workflow), base = structuredClone(expected);
+		return this.mutateDefinitions(async () => {
+			const current = this.workflows.get(captured.id), disk = await this.store.readDefinition(captured.id);
+			if (validateDependencies) this.dependencies(captured, new Map([...this.workflows, [captured.id, captured]]));
+			if ((current ? definitionHash(current) : undefined) !== (disk ? definitionHash(disk) : undefined) ||
+				(base.expectedRevision !== undefined && base.expectedRevision !== (current?.revision ?? 0)) ||
+				(base.expectedContentHash !== undefined && (!current || base.expectedContentHash !== definitionHash(current))))
+				throw new Error('This library workflow changed. Refresh definitions and review your draft before saving.');
+			const saved = { ...captured, revision: (current?.revision ?? 0) + 1, updatedAt: this.now() };
+			await this.store.saveWorkflow(saved);
+			this.workflows.set(saved.id, saved);
+			this.refreshWatchers(); this.changed();
+			return structuredClone(saved);
+		});
 	}
 	async deleteWorkflow(id: string): Promise<void> {
+		return this.mutateDefinitions(async () => {
+		const current = this.workflows.get(id), disk = await this.store.readDefinition(id);
+		if ((current ? definitionHash(current) : undefined) !== (disk ? definitionHash(disk) : undefined)) throw new Error('This library workflow changed. Refresh definitions before deleting.');
 		await this.store.deleteWorkflow(id);
 		this.workflows.delete(id);
 		this.refreshWatchers();
 		this.changed();
+		});
 	}
 	async command(command: WorkflowCommand): Promise<WorkflowSnapshot> {
 		validateWorkflowCommand(command);
 		switch (command.type) {
+			case 'refresh-definitions': await this.refreshDefinitions(); break;
+ case 'install-custom-node':
+ case 'remove-custom-node':
+ case 'discover-custom-node':
+ case 'authorize-custom-node':
+ case 'set-custom-node-secret':
+ throw new Error('Manage custom node packages on the owning desktop host.');
 			case 'save':
-				await this.saveWorkflow(command.workflow);
+				if (this.workflows.has(command.workflow.id) && (command.expectedRevision === undefined || command.expectedContentHash === undefined)) throw new Error('Refresh this library workflow before saving; its base revision and content are required.');
+				await this.saveWorkflow(command.workflow, { ...command, expectedRevision: command.expectedRevision ?? 0 });
 				break;
 			case 'delete':
 				await this.deleteWorkflow(command.id);
@@ -918,6 +1014,7 @@ export class WorkflowEngine {
 	}
 	private async admit(workflowId: string, options: StartWorkflowOptions): Promise<WorkflowRun> {
 		if (this.closed) throw new Error('Workflow engine is closed.');
+		if (options.expectedDefinitionHash !== undefined && (!this.workflows.has(workflowId) || this.triggerDefinitionHash(this.workflows.get(workflowId)!) !== options.expectedDefinitionHash)) throw new Error('The workflow definition changed before its automatic trigger was admitted.');
 		if (!validId(workflowId)) throw new Error('Invalid workflow identifier.');
 		for (const value of [options.bindingId, options.sourceThreadId, options.parentRunId])
 			if (value !== undefined && !validId(value))
@@ -1785,6 +1882,16 @@ export class WorkflowEngine {
 		return result;
 	}
 	private refreshWatchers(): void {
+		for (const [key, timer] of this.eventTimers) {
+			const captured = this.eventTimerDefinitions.get(key);
+			const current = captured && this.workflows.get(captured.workflowId);
+			try {
+				if (current?.enabled && this.triggerDefinitionHash(current) === captured?.hash) continue;
+			} catch { /* An invalid dependency makes the pending event stale. */ }
+			clearTimeout(timer);
+			this.eventTimers.delete(key);
+			this.eventTimerDefinitions.delete(key);
+		}
 		for (const watcher of this.watchers) watcher.close();
 		this.watchers = [];
 		if (!this.initialized || this.closed) return;
@@ -1793,6 +1900,7 @@ export class WorkflowEngine {
 				for (const node of workflow.nodes) {
 					if (node.type !== 'event' || !node.config.path) continue;
 					try {
+						const generation = this.triggerDefinitionHash(workflow);
 						const watcher = watch(
 							String(node.config.path),
 							{ persistent: false },
@@ -1800,17 +1908,20 @@ export class WorkflowEngine {
 								const key = `${workflow.id}:${node.id}`;
 								const previous = this.eventTimers.get(key);
 								if (previous) clearTimeout(previous);
+								this.eventTimerDefinitions.set(key, { workflowId: workflow.id, hash: generation });
 								this.eventTimers.set(
 									key,
 									setTimeout(
 										() => {
 											this.eventTimers.delete(key);
+											this.eventTimerDefinitions.delete(key);
 											const payload = {
 												path: String(node.config.path),
 												filename: filename?.toString(),
 												eventType,
 											};
 											void this.startRun(workflow.id, {
+													expectedDefinitionHash: generation,
 												inputs: payload,
 												trigger: { kind: 'event', nodeId: node.id, name: 'file.changed', payload },
 											}).catch((error) => this.options.onError?.(error));
@@ -1832,6 +1943,8 @@ export class WorkflowEngine {
 		if (this.timer) clearInterval(this.timer);
 		for (const watcher of this.watchers) watcher.close();
 		for (const timer of this.eventTimers.values()) clearTimeout(timer);
+		this.eventTimers.clear();
+		this.eventTimerDefinitions.clear();
 		await this.scheduler.dispose();
 		for (const [id, controller] of this.controllers) {
 			controller.abort();
@@ -1847,7 +1960,7 @@ export class WorkflowEngine {
 				await this.store.saveRun(run);
 			}
 		}
-		await Promise.allSettled([this.startSerial, this.bindingSerial]);
+		await Promise.allSettled([this.startSerial, this.bindingSerial, this.definitionSerial]);
 		await this.store.flush();
 	}
 }

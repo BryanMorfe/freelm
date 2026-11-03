@@ -20,6 +20,8 @@
 		"package:linux": "node scripts/prepare-search-runtime.mjs && npm run build && electron-builder --linux AppImage deb",
 		"format": "prettier --write .",
 		"test:desktop": "node scripts/smoke-desktop.mjs",
+		"test:providers": "node scripts/smoke-provider-compatibility.mjs",
+		"test:setup": "node scripts/smoke-setup.mjs",
 		"test:bots": "node scripts/smoke-bots.mjs",
 		"test:bot-activity": "node scripts/smoke-bot-activity.mjs",
 		"test:bot-tasks": "node scripts/smoke-bot-tasks.mjs",
@@ -53,6 +55,7 @@
 		"@lezer/highlight": "^1.2.5",
 		"@modelcontextprotocol/sdk": "^1.31.0",
 		"@napi-rs/canvas": "^1.0.9",
+		"@peculiar/x509": "2.2.0",
 		"ajv": "^8.20.0",
 		"ajv-formats": "^3.0.1",
 		"esbuild-wasm": "^0.25.12",
@@ -62,10 +65,12 @@
 		"katex": "^0.19.0",
 		"lucide-react": "^0.468.0",
 		"pdfjs-dist": "^6.3.289",
+		"qrcode": "^1.5.4",
 		"quickjs-emscripten": "0.31.0",
 		"react": "^19.1.1",
 		"react-dom": "^19.1.1",
 		"react-markdown": "^10.1.0",
+		"reflect-metadata": "0.2.2",
 		"rehype-katex": "^7.0.1",
 		"remark-gfm": "^4.0.1",
 		"remark-math": "^6.0.0",
@@ -77,6 +82,7 @@
 		"@storybook/addon-docs": "10.6.1",
 		"@storybook/react-vite": "10.6.1",
 		"@types/node": "^22.18.0",
+		"@types/qrcode": "^1.5.6",
 		"@types/react": "^19.1.13",
 		"@types/react-dom": "^19.1.9",
 		"@vitejs/plugin-react": "^4.7.0",
@@ -111,6 +117,8 @@
 			"node_modules/@jitl/**",
 			"node_modules/pdfjs-dist/**",
 			"node_modules/@napi-rs/**",
+			"dist-electron/custom-node-runtime-worker.cjs",
+			"dist-electron/custom-node-compiler-worker.cjs",
 			"dist-electron/plugin-runtime-worker.cjs",
 			"dist-electron/plugin-surface-runtime-worker.cjs",
 			"dist-electron/plugin-compiler-worker.cjs",
@@ -140,6 +148,10 @@
 				{
 					"from": "resources/computer/freelm-computer",
 					"to": "computer/freelm-computer"
+				},
+				{
+					"from": "resources/pairing/freelm-pairing-vault",
+					"to": "pairing/freelm-pairing-vault"
 				}
 			]
 		},
@@ -170,6 +182,13 @@
 		},
 		"win": {
 			"icon": "resources/branding/icon.ico"
+		},
+		"electronFuses": {
+			"runAsNode": false,
+			"enableNodeOptionsEnvironmentVariable": false,
+			"enableNodeCliInspectArguments": false,
+			"enableEmbeddedAsarIntegrityValidation": true,
+			"onlyLoadAppFromAsar": true
 		}
 	}
 }

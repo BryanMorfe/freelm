@@ -3,7 +3,7 @@ import { Worker } from 'node:worker_threads';
 
 export interface LocalPluginInvocation {
 	code: string;
-	kind: 'tool' | 'action';
+	kind: 'tool' | 'action' | 'provider';
 	name: string;
 	args: Record<string, unknown>;
 	account: { id: string; label: string };
@@ -46,7 +46,7 @@ export async function executeLocalPlugin(
 	if (
 		typeof input.code !== 'string' ||
 		Buffer.byteLength(input.code) > 4 * JSON_LIMIT ||
-		!['tool', 'action'].includes(input.kind) ||
+		!['tool', 'action', 'provider'].includes(input.kind) ||
 		!/^[a-zA-Z][a-zA-Z0-9_-]{0,79}$/.test(input.name)
 	)
 		throw new Error('Invalid plugin invocation.');

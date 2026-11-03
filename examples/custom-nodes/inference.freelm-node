@@ -1,0 +1,40 @@
+{
+  "manifest": {
+    "id": "inference",
+    "version": "1.0.0",
+    "title": "FreeLM inference node",
+    "description": "Uses an explicitly authorized configured FreeLM connection.",
+    "inputs": [
+      {
+        "id": "prompt",
+        "label": "Prompt",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "id": "response",
+        "label": "Response",
+        "type": "object"
+      }
+    ],
+    "fields": [
+      {
+        "key": "connectionId",
+        "label": "Connection ID",
+        "kind": "text"
+      },
+      {
+        "key": "model",
+        "label": "Model",
+        "kind": "text"
+      }
+    ],
+    "permissions": {
+      "inference": true
+    },
+    "retrySafe": false
+  },
+  "source": "export default {async execute(input,ctx){return {response:await ctx.inference({connectionId:ctx.config.connectionId,model:ctx.config.model,prompt:input.prompt})}}};"
+}

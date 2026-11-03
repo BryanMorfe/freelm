@@ -19,6 +19,7 @@ export const workspaceFields = [
 	'chatDrafts',
 	'dictation',
 	'backgroundNotifications',
+	'botResponseSound',
 	'codeCompaction',
 	'moderation',
 ] as const satisfies readonly (keyof AppState)[];
@@ -34,6 +35,7 @@ const optionalFields = [
 	'chatDrafts',
 	'dictation',
 	'backgroundNotifications',
+	'botResponseSound',
 	'codeCompaction',
 	'moderation',
 ] as const;

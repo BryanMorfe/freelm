@@ -42,19 +42,21 @@
 	font-size: var(--font-size-ui);
 }
 .plugin-manifest-review {
-	display: grid;
-	grid-template-columns: minmax(90px, 140px) minmax(0, 1fr);
-	gap: 8px 16px;
-	margin: 8px 0;
+	display: flex;
+	flex-direction: column;
+	gap: 18px;
+	margin-top: 16px;
+	min-width: 0;
+}
+.plugin-manifest-review .plugin-information-row .settings-row-control {
+	flex: 1 1 62%;
 	font-size: var(--font-size-ui);
 	line-height: 1.45;
-}
-.plugin-manifest-review dt {
-	color: var(--muted);
-}
-.plugin-manifest-review dd {
-	margin: 0;
+	justify-content: flex-start;
 	overflow-wrap: anywhere;
+}
+.plugin-manifest-review .plugin-information-row .settings-row-copy {
+	flex: 0 1 30%;
 }
 .plugin-settings .plugin-manifest-file {
 	display: none;
@@ -64,12 +66,43 @@
 	min-height: 150px;
 	max-height: 500px;
 }
+.plugin-manifest-details,
+.plugin-permissions {
+	width: 100%;
+	min-width: 0;
+}
 .plugin-manifest-details summary,
 .plugin-permissions summary {
 	cursor: pointer;
 	color: var(--text);
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	list-style: none;
+	min-height: 30px;
 }
-.plugin-permissions summary > span {
+.plugin-manifest-details summary::-webkit-details-marker,
+.plugin-permissions summary::-webkit-details-marker {
+	display: none;
+}
+.plugin-manifest-details summary::marker,
+.plugin-permissions summary::marker {
+	content: '';
+}
+.plugin-disclosure-chevron {
+	flex-shrink: 0;
+	color: var(--muted);
+}
+details[open] > summary > .plugin-disclosure-chevron {
+	transform: rotate(90deg);
+}
+.plugin-manifest-details summary:focus-visible,
+.plugin-permissions summary:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 3px;
+	border-radius: 4px;
+}
+.plugin-permissions summary > .plugin-disclosure-meta {
 	color: var(--muted);
 	margin-left: 6px;
 	font-size: 12px;
@@ -154,12 +187,5 @@
 @media (max-width: 700px) {
 	.plugin-settings-intro {
 		flex-wrap: wrap;
-	}
-	.plugin-manifest-review {
-		grid-template-columns: 1fr;
-		gap: 3px;
-	}
-	.plugin-manifest-review dd {
-		margin-bottom: 8px;
 	}
 }

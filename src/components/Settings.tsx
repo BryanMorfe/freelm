@@ -1,3 +1,8 @@
+import ConnectionFields from './ConnectionFields';
+import { assertConnection } from '../lib/connection-validation';
+import MobilePairingSettings from './MobilePairingSettings';
+import BotSoundSettings from './BotSoundSettings';
+import { defaultBotResponseSound } from '../notification-types';
 import { userFacingError } from '../lib/user-facing-error';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -76,6 +81,7 @@ export type SettingsSection =
 	| 'memories'
 	| 'moderation'
 	| 'appearance'
+	| 'iphone'
 	| 'connections'
 	| 'search'
 	| 'tools'
@@ -91,6 +97,7 @@ export interface SettingsValues {
 	debugMode: boolean;
 	dictation: import('../types').DictationSettings;
 	backgroundNotifications: boolean;
+	botResponseSound?: import('../notification-types').BotResponseSound;
 	codeCompaction?: CodeCompactionSettings;
 	memorySettings: ChatMemorySettings;
 	personalization?: PersonalizationValues;
@@ -116,6 +123,8 @@ interface Props {
 		values: Omit<SettingsValues, 'toolSettings'> & { toolSettings?: ToolSettingsValue },
 	) => Promise<void>;
 	onClose: () => void;
+	onOpenPlugins?: () => void;
+	onWelcome?: () => void;
 	onRestoreThread?: (id: string) => void;
 	onMemoryChange?: (mutation: MemoryMutation) => Promise<void>;
 	onClearMemorySummaries?: () => Promise<void>;
@@ -141,6 +150,7 @@ const sections = [
 	{ id: 'moderation', name: 'Moderation' },
 	{ id: 'appearance', name: 'Appearance' },
 	{ id: 'connections', name: 'Connections' },
+    { id: 'iphone', name: 'iPhone Bots' },
 	{ id: 'search', name: 'Search' },
 	{ id: 'tools', name: 'Tools' },
 ] as const;
@@ -155,13 +165,15 @@ const descriptions: Record<SettingsSection, string> = {
 	code: 'Configure how Code manages context during longer tasks.',
 	schedules: 'Manage reminders and scheduled work for your bots and Code tasks.',
 	archived: 'Restore conversations you have archived.',
-	configuration: 'Configure your models and choose the thinking values they support.',
+	configuration:
+		'Discover or add a model, then choose Standard mode or the thinking values it supports.',
 	personalization: 'Customize how Chat and Code communicate with you.',
 	system: 'Inspect the instructions FreeLM sends and add workspace guidance.',
 	memories: 'Choose what Chat remembers and manage your saved details.',
 	moderation: 'Choose the policy and evaluators for image and video generation.',
 	appearance: 'Choose the appearance of your workspace.',
 	connections: 'Connect your workspace to the APIs you use.',
+    iphone: 'Connect one iPhone securely to Bots on this Mac.',
 	plugins: 'Connect services and manage account access for Chat, Code, and Bots.',
 	remote: 'Open another computer’s FreeLM workspace and run requests there.',
 	search: 'Choose a search service and the engines used for web browsing.',
@@ -184,6 +196,7 @@ function valuesFor(
 		debugMode: state.debugMode ?? false,
 		dictation: state.dictation ?? { enabled: false, connectionId: '', model: '' },
 		backgroundNotifications: state.backgroundNotifications ?? true,
+		botResponseSound: state.botResponseSound ?? defaultBotResponseSound,
 		...(codeCompactionSupported
 			? { codeCompaction: state.codeCompaction ?? defaultCodeCompactionSettings() }
 			: {}),
@@ -215,6 +228,8 @@ export default function Settings({
 	onSelectWorkspace,
 	onSave,
 	onClose,
+	onOpenPlugins,
+	onWelcome,
 	onRestoreThread,
 	onMemoryChange,
 	onClearMemorySummaries,
@@ -327,6 +342,7 @@ export default function Settings({
 		if (!working) navigate(initialSection);
 	}, [initialSection, sectionRequest]);
 	async function discover() {
+		if (connection.providerAdapter) return;
 		const controller = new AbortController();
 		discovery.current = controller;
 		setBusy(true);
@@ -337,7 +353,7 @@ export default function Settings({
 			updateConnection({ discoveredModels: models });
 			setNotice(
 				models.length
-					? `Found ${models.length} models. Configure any model below.`
+					? `Found ${models.length} ${models.length === 1 ? 'model' : 'models'}. Configure any model below.`
 					: 'Connected. No models listed; add a model by its API ID.',
 			);
 		} catch (e) {
@@ -359,21 +375,7 @@ export default function Settings({
 			return;
 		}
 		try {
-			for (const c of values.connections) {
-				const url = new URL(c.baseUrl);
-				if (
-					!['http:', 'https:'].includes(url.protocol) ||
-					url.username ||
-					url.password ||
-					url.search ||
-					url.hash
-				)
-					throw new Error(
-						'Use an HTTP or HTTPS base URL without credentials, query parameters, or a fragment.',
-					);
-				if (!c.name.trim()) throw new Error('Give each connection a name.');
-				if (c.catalog) assertModelCatalog(c.catalog);
-			}
+			for (const c of values.connections) assertConnection(c);
 			assertThinkingPresets(values.thinkingPresets);
 			if (codeCompactionSupported && values.codeCompaction)
 				validateCodeCompactionSettings(values.codeCompaction);
@@ -471,12 +473,18 @@ export default function Settings({
 							<p>{descriptions[section]}</p>
 						</header>
 						<div hidden={section !== 'configuration'} className="settings-section-content">
-							<ThinkingPresetsEditor
-								presets={values.thinkingPresets}
-								onChange={(thinkingPresets) => update({ thinkingPresets })}
-								onEditingChange={setPresetsEditing}
-							/>
-							<SettingsGroup title="Model discovery">
+							<SettingsGroup
+								title="Model discovery"
+								actions={
+									<button
+										className="secondary-button compact"
+										disabled={working || catalogEditing}
+										onClick={() => navigate('connections')}
+									>
+										Edit connection
+									</button>
+								}
+							>
 								<SettingsRow
 									label="API connection"
 									description="Choose the API whose models you want to discover and configure."
@@ -491,13 +499,13 @@ export default function Settings({
 								</SettingsRow>
 								<SettingsRow
 									label="Discover available models"
-									description="Load the model catalog from this API connection."
+									description={connection.providerAdapter ? "Provider adapters use manual model IDs. Add models in the catalog below." : "Load the model catalog from this API connection."}
 								>
 									{!remote && (
 										<button
 											className="secondary-button"
 											onClick={() => void discover()}
-											disabled={busy || catalogEditing}
+											disabled={busy || catalogEditing || !!connection.providerAdapter}
 										>
 											{busy ? <LoaderCircle size={15} className="spin" /> : <Server size={15} />}
 											{busy ? 'Discovering…' : 'Discover models'}
@@ -534,6 +542,11 @@ export default function Settings({
 								readOnly={remote}
 								onChange={(catalog) => updateConnection({ catalog })}
 								onEditingChange={setCatalogEditing}
+							/>
+							<ThinkingPresetsEditor
+								presets={values.thinkingPresets}
+								onChange={(thinkingPresets) => update({ thinkingPresets })}
+								onEditingChange={setPresetsEditing}
 							/>
 						</div>
 						<div hidden={section !== 'personalization'} className="settings-section-content">
@@ -629,7 +642,7 @@ export default function Settings({
 							<SettingsGroup title="Notifications">
 								<SettingsRow
 									label="Background notifications"
-									description="Notify when a reply finishes while FreeLM is in the background."
+									description="Notify when Chat, Code, Bots or workflows finish while FreeLM is in the background."
 								>
 									<Switch
 										checked={values.backgroundNotifications}
@@ -637,6 +650,11 @@ export default function Settings({
 										aria-label="Background notifications"
 									/>
 								</SettingsRow>
+								<BotSoundSettings
+									value={values.botResponseSound}
+									onChange={(botResponseSound) => update({ botResponseSound })}
+									disabled={!values.backgroundNotifications}
+								/>
 							</SettingsGroup>
 						</div>
 						<div hidden={section !== 'moderation'} className="settings-section-content">
@@ -758,9 +776,13 @@ export default function Settings({
 								</SettingsRow>
 							</SettingsGroup>
 						</div>
-						<div hidden={section !== 'connections'} className="settings-section-content">
+						<div hidden={section !== 'iphone'} className="settings-section-content">
+                            {section === 'iphone' && (remote ? <p>Open Settings on the owning Mac to pair an iPhone.</p> : <MobilePairingSettings />)}
+                        </div>
+                        <div hidden={section !== 'connections'} className="settings-section-content">
 							<SettingsGroup
 								title="Your API connections"
+ footer={onWelcome ? <button className="secondary-button" onClick={onWelcome}>Welcome & setup</button> : undefined}
 								actions={
 									!remote && (
 										<button
@@ -811,69 +833,18 @@ export default function Settings({
 								</div>
 							</SettingsGroup>
 							<SettingsGroup title="Connection details">
-								<SettingsRow label="Connection name" htmlFor="settings-connection-name">
-									<input
-										id="settings-connection-name"
-										readOnly={remote}
-										value={connection.name}
-										onChange={(e) => updateConnection({ name: e.target.value })}
-										placeholder="My provider"
-									/>
-								</SettingsRow>
+<ConnectionFields connection={connection} updateConnection={updateConnection} remote={remote} secureStorage={secureStorage} secureStorageChecked={secureStorageChecked} />
 								<SettingsRow
-									label="API base URL"
-									htmlFor="settings-connection-url"
-									description="Include the API prefix, usually /v1."
+									label="Models for this connection"
+									description="Discover available models or add an API model ID, then configure a mode before using it in Chat, Code or Bots."
 								>
-									<input
-										readOnly={remote}
-										type="url"
-										id="settings-connection-url"
-										value={connection.baseUrl}
-										onChange={(e) => updateConnection({ baseUrl: e.target.value })}
-										placeholder="http://localhost:8000/v1"
-									/>
-								</SettingsRow>
-								{!remote && (
-									<SettingsRow
-										label={
-											<>
-												API key <span className="optional">optional</span>
-											</>
-										}
-										htmlFor="settings-connection-key"
-										description={
-											secureStorage
-												? 'Encrypted with your operating system’s secret storage.'
-												: secureStorageChecked
-													? 'Kept in memory for this session. Secure key storage is unavailable.'
-													: 'System secret storage is checked when saving an API key.'
-										}
+									<button
+										className="secondary-button"
+										disabled={working}
+										onClick={() => navigate('configuration')}
 									>
-										<input
-											id="settings-connection-key"
-											type="password"
-											autoComplete="off"
-											value={connection.apiKey}
-											onChange={(e) => updateConnection({ apiKey: e.target.value })}
-											placeholder="Not required for most local servers"
-										/>
-									</SettingsRow>
-								)}
-								<SettingsRow label="Chat endpoint">
-									<Select
-										aria-label="Chat endpoint"
-										disabled={remote}
-										value={connection.chatApi}
-										onChange={(chatApi) =>
-											updateConnection({ chatApi: chatApi as Connection['chatApi'] })
-										}
-										options={[
-											{ value: 'responses', label: '/responses' },
-											{ value: 'chat/completions', label: '/chat/completions' },
-											{ value: 'chat', label: '/chat (compatible alias)' },
-										]}
-									/>
+										Configure models
+									</button>
 								</SettingsRow>
 								{!remote && values.connections.length > 1 && (
 									<SettingsRow>
@@ -941,12 +912,25 @@ export default function Settings({
 						)}
 						{section === 'plugins' && (
 							<div className="settings-section-content">
-								<PluginSettings
-									readOnly={remote}
-									workspaceName={workspaceName}
-									connections={state.connections}
-									workspaceId={activeWorkspaceId ?? 'local'}
-								/>
+								{onOpenPlugins ? (
+									<SettingsGroup title="Plugin library">
+										<SettingsRow
+											label="Plugins"
+											description="Browse examples, install plugins, and manage their accounts and permissions."
+										>
+											<button className="secondary-button" onClick={onOpenPlugins}>
+												Open Plugins
+											</button>
+										</SettingsRow>
+									</SettingsGroup>
+								) : (
+									<PluginSettings
+										readOnly={remote}
+										workspaceName={workspaceName}
+										connections={state.connections}
+										workspaceId={activeWorkspaceId ?? 'local'}
+									/>
+								)}
 							</div>
 						)}
 						{section === 'remote' && (

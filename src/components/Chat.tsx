@@ -1,3 +1,4 @@
+import { motionScrollBehavior } from '../lib/motion';
 import {
 	Fragment,
 	lazy,
@@ -114,6 +115,7 @@ interface Props {
 	busy: boolean;
 	runningHere: boolean;
 	canQueue?: boolean;
+	canSteer?: boolean;
 	onQueueEdit?: (
 		id: string,
 		content: string,
@@ -135,6 +137,7 @@ interface Props {
 	onStop: () => void;
 	onRetry: () => void;
 	onSettings: () => void;
+	onSetupConnection?: () => void;
 	toolsEnabled?: boolean;
 	onToolsSettings?: () => void;
 	onEditProject?: (project: Project) => void;
@@ -165,7 +168,7 @@ export default function Chat(p: Props) {
 	);
 	const [editingQueueId, setEditingQueueId] = useState<string>();
 	const hasDraft = !!draft.trim() || attachments.length > 0;
-	const showStop = p.runningHere && (!isCode || (!hasDraft && !editingQueueId));
+	const showStop = p.runningHere && !editingQueueId && (!hasDraft || (!isCode && !p.canSteer));
 	const queueEdit = useRef<
 		| {
 				id: string;
@@ -299,7 +302,21 @@ export default function Chat(p: Props) {
 	});
 	const fileInput = useRef<HTMLInputElement>(null);
 	const follow = useRef(true);
+	const revealSend = useRef<{ previous?: string } | undefined>(undefined);
+	const lastUserId = p.thread?.messages.slice().reverse().find(message => message.role === 'user')?.id;
 	const hasMessages = !!p.thread?.messages.length;
+	useLayoutEffect(() => {
+		if (!revealSend.current || lastUserId === revealSend.current.previous) return;
+		follow.current = true;
+		const scroll = viewport.current;
+		if (scroll) scroll.scrollTop = scroll.scrollHeight;
+		setShowJump(false);
+		const frame = requestAnimationFrame(() => {
+			if (scroll) scroll.scrollTop = scroll.scrollHeight;
+			revealSend.current = undefined;
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [lastUserId]);
 	const approvalPending = isCode && !!p.approvalPrompt;
 	const queueFailures = useMemo(() => {
 		if (!p.thread?.codeQueueFailures?.length) return [];
@@ -541,7 +558,7 @@ export default function Chat(p: Props) {
 		if (
 			submissionScope.current === draftScope ||
 			submitting ||
-			(p.busy && !p.canQueue) ||
+			(p.busy && !p.canQueue && !p.canSteer) ||
 			modelError ||
 			(!fromDictation && dictationSessionRef.current === dictationScope) ||
 			(!draft.trim() && !attachments.length)
@@ -569,6 +586,7 @@ export default function Chat(p: Props) {
 			return;
 		}
 		submissionScope.current = scope;
+		if (!(isCode && p.busy)) revealSend.current = { previous: lastUserId };
 		setSubmitting(true);
 		// Dictation can insert and send in one React batch, leaving the value prop
 		// unchanged. Clear the editor and its history explicitly on accepted sends.
@@ -581,6 +599,7 @@ export default function Chat(p: Props) {
 		try {
 			await p.onSend(content, files, reference, isCode ? composer : undefined);
 		} catch (cause) {
+			revealSend.current = undefined;
 			if (activeScope.current === scope) {
 				if (
 					!draftValue.current.content &&
@@ -639,6 +658,7 @@ export default function Chat(p: Props) {
 				className="chat-scroll"
 				ref={viewport}
 				onScroll={() => {
+					if (revealSend.current) return;
 					const v = viewport.current!;
 					follow.current = v.scrollHeight - v.scrollTop - v.clientHeight < 100;
 					setShowJump(!follow.current);
@@ -754,7 +774,10 @@ export default function Chat(p: Props) {
 					aria-label="Scroll to latest"
 					onClick={() => {
 						follow.current = true;
-						viewport.current?.scrollTo({ top: viewport.current.scrollHeight, behavior: 'smooth' });
+						viewport.current?.scrollTo({
+							top: viewport.current.scrollHeight,
+							behavior: motionScrollBehavior(),
+						});
 					}}
 				>
 					<ArrowDown size={18} />
@@ -762,7 +785,7 @@ export default function Chat(p: Props) {
 			)}
 			<div className="composer-area">
 				{!p.model && !hasMessages && (
-					<button className="connection-prompt" onClick={p.onSettings}>
+					<button className="connection-prompt" onClick={p.onSetupConnection ?? p.onSettings}>
 						<span className="status-dot" />
 						<span>Connect an API to get started</span>
 						<span>
@@ -879,7 +902,7 @@ export default function Chat(p: Props) {
 							discover={p.onComposerDiscover}
 							onRequestFiles={() => fileInput.current?.click()}
 							disabled={submitting}
-							busy={(p.busy && !p.canQueue) || submitting}
+							busy={(p.busy && !p.canQueue && !p.canSteer) || submitting}
 							onChange={setDraft}
 							onBlur={flushDraft}
 							onPluginKey={(key) => p.pluginSurface?.handleKey(key) ?? false}
@@ -1005,7 +1028,7 @@ export default function Chat(p: Props) {
 									connection={p.dictationConnection}
 									scope={dictationScope}
 									disabled={submitting}
-									canSend={!p.busy && !submitting && !modelError && !!p.model.trim()}
+									canSend={(!p.busy || !!p.canSteer) && !submitting && !modelError && !!p.model.trim()}
 									onActiveChange={(active) => {
 										if (activeDictationScope.current !== dictationScope) return;
 										const session = active ? dictationScope : undefined;
@@ -1036,13 +1059,13 @@ export default function Chat(p: Props) {
 									<button
 										className={`send-button${editingQueueId ? ' queue-send-button' : ''}`}
 										onClick={() => void submit()}
-										disabled={(p.busy && !p.canQueue) || submitting || !!modelError || !hasDraft}
+										disabled={(p.busy && !p.canQueue && !p.canSteer) || submitting || !!modelError || !hasDraft}
 										aria-label={editingQueueId ? 'Save queued message' : 'Send message'}
 										title={editingQueueId ? 'Save queued message' : 'Send message'}
 									>
 										{editingQueueId ? (
 											<Check size={18} />
-										) : (!isCode && p.busy) || submitting ? (
+										) : (!isCode && p.busy && !p.canSteer) || submitting ? (
 											<LoaderCircle size={18} className="spin" />
 										) : (
 											<ArrowUp size={18} />

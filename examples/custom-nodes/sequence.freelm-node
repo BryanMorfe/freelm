@@ -1,0 +1,33 @@
+{
+  "manifest": {
+    "id": "sequence",
+    "version": "1.0.0",
+    "title": "Synthetic sequence structure",
+    "description": "Synthetic fixture; no scientific prediction or external service.",
+    "inputs": [
+      {
+        "id": "sequence",
+        "label": "Sequence",
+        "type": "text",
+        "required": true
+      }
+    ],
+    "outputs": [
+      {
+        "id": "structure",
+        "label": "Structure",
+        "type": "file",
+        "required": true
+      },
+      {
+        "id": "length",
+        "label": "Length",
+        "type": "number"
+      }
+    ],
+    "fields": [],
+    "permissions": {},
+    "retrySafe": true
+  },
+  "source": "import {defineNode} from '@freelm/custom-node-sdk'; export default defineNode({async execute(input,ctx){return {structure:await ctx.artifacts.write('structure.json','application/json',JSON.stringify({sequence:input.sequence})),length:input.sequence.length}}});"
+}

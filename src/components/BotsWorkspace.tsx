@@ -1,3 +1,4 @@
+import { animateEntrance } from '../lib/motion';
 import { userFacingError } from '../lib/user-facing-error';
 import {
 	forwardRef,
@@ -19,6 +20,7 @@ import {
 	Lightbulb,
 	MoreHorizontal,
 	Pencil,
+	Plus,
 	Reply,
 	RotateCcw,
 	Square,
@@ -44,9 +46,14 @@ import BotMessageBody from './BotMessageBody';
 import MessageMarkdown from './MessageMarkdown';
 import type { BotContact } from './bots-ui-types';
 import './bots.css';
+import DictationButton from './DictationButton';
+import type { Attachment, Connection, DictationSettings } from '../types';
 
 type Action = Promise<void> | void;
 export interface BotsWorkspaceProps {
+	dictation?: DictationSettings;
+	dictationConnection?: Connection;
+	onDictationSettings?: () => void;
 	conversation?: BotConversation;
 	contacts: BotContact[];
 	hostName: string;
@@ -54,7 +61,12 @@ export interface BotsWorkspaceProps {
 	onJobAction?: (job: BotJobItem, action: BotJobAction) => Action;
 	loading?: boolean;
 	error?: string;
-	onSend: (content: string, replyTo?: string, mentions?: BotMention[]) => Action;
+	onSend: (
+		content: string,
+		replyTo?: string,
+		mentions?: BotMention[],
+		attachments?: Attachment[],
+	) => Action;
 	onDraftChange: (content: string, mentions?: BotMention[]) => void;
 	onReact: (message: BotMessage, emoji: BotReactionEmoji | null) => Action;
 	onEdit: (message: BotMessage, content: string, mentions?: BotMention[]) => Action;
@@ -85,15 +97,25 @@ function messageReadAt(message: BotMessage, participants: BotConversation['parti
 }
 
 export default function BotsWorkspace(p: BotsWorkspaceProps) {
+	const [attachments, setAttachments] = useState<Attachment[]>([]);
+	const [readingFiles, setReadingFiles] = useState(false);
+	const fileInput = useRef<HTMLInputElement>(null);
+	const fileReadGeneration = useRef(0);
 	const [draft, setDraft] = useState(p.conversation?.draft || '');
 	const [draftMentions, setDraftMentions] = useState<BotMention[]>(
 		p.conversation?.draftMentions || [],
 	);
+	const dictationScope = p.conversation?.id || '';
+	const activeDictationScope = useRef(dictationScope);
+	activeDictationScope.current = dictationScope;
+	const [dictationSession, setDictationSession] = useState<string>();
+	const dictating = dictationSession === dictationScope;
 	const [stopping, setStopping] = useState(false);
 	const [profileOpen, setProfileOpen] = useState(false);
 	const [reply, setReply] = useState<BotMessage>();
 	const [error, setError] = useState('');
 	const [submitting, setSubmitting] = useState(false);
+	const [composerKeyboardFocus, setComposerKeyboardFocus] = useState(true);
 	const composer = useRef<HTMLTextAreaElement>(null);
 	const scroller = useRef<HTMLDivElement>(null);
 	const header = useRef<HTMLElement>(null);
@@ -162,6 +184,9 @@ export default function BotsWorkspace(p: BotsWorkspaceProps) {
 		if (current.current !== p.conversation?.id) {
 			current.current = p.conversation?.id;
 			setDraft(p.conversation?.draft || '');
+			setAttachments([]);
+			fileReadGeneration.current++;
+			setReadingFiles(false);
 			setDraftMentions(p.conversation?.draftMentions || []);
 			setReply(undefined);
 			setError('');
@@ -199,25 +224,27 @@ export default function BotsWorkspace(p: BotsWorkspaceProps) {
 			p.loading,
 		);
 		previousAppearances.current = snapshot;
-		if (!entering.size || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+		if (!entering.size) return;
+		const animations: Animation[] = [];
 		for (const entry of scroller.current?.querySelectorAll<HTMLElement>('[data-bot-message-id]') ||
 			[]) {
 			if (!entering.has(entry.dataset.botMessageId || '')) continue;
 			const bubble = entry.querySelector<HTMLElement>('.bot-message-bubble-wrap');
-			bubble?.animate?.(
-				[
-					{ opacity: 0, transform: 'translateY(8px) scale(.98)' },
-					{ opacity: 1, transform: 'none' },
-				],
-				{ duration: 240, easing: 'cubic-bezier(.22,.7,.25,1)' },
-			);
+			if (!bubble) continue;
+			const animation = animateEntrance(bubble, [
+				{ opacity: 0, transform: 'translateY(8px) scale(.98)' },
+				{ opacity: 1, transform: 'none' },
+			]);
+			if (animation) animations.push(animation);
 		}
+		return () => animations.forEach((animation) => animation.cancel());
 	}, [p.conversation?.id, p.conversation?.messages, p.loading]);
 	useLayoutEffect(() => {
 		const element = scroller.current;
 		if (element && following.current) element.scrollTop = element.scrollHeight;
 	}, [p.conversation?.id, p.conversation?.messages]);
 	function changeDraft(value: string, mentions: BotMention[] = []) {
+		draftRef.current = value;
 		setDraft(value);
 		setDraftMentions(mentions);
 		p.onDraftChange(value, mentions);
@@ -239,11 +266,58 @@ export default function BotsWorkspace(p: BotsWorkspaceProps) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
 	}
-	async function send() {
-		const submittedDraft = draft;
+	async function attachFiles(files: File[]) {
+		const scope = current.current;
+		const generation = ++fileReadGeneration.current;
+		setReadingFiles(true);
+		setError('');
+		try {
+			if (attachments.length + files.length > 6)
+				throw new Error('Attach up to 6 files per message.');
+			if (files.some((file) => file.size > 8 * 1024 * 1024))
+				throw new Error('Each attachment must be 8 MB or smaller.');
+			const existingBytes = attachments.reduce(
+				(sum, file) => sum + ((file.dataUrl.split(',')[1]?.length || 0) * 3) / 4,
+				0,
+			);
+			if (existingBytes + files.reduce((sum, file) => sum + file.size, 0) > 16 * 1024 * 1024)
+				throw new Error('Attachments must total 16 MB or less.');
+			const added = await Promise.all(
+				files.map(
+					(file) =>
+						new Promise<Attachment>((resolve, reject) => {
+							const reader = new FileReader();
+							reader.onerror = () => reject(new Error(`Could not read ${file.name}.`));
+							reader.onload = () =>
+								resolve({
+									name: file.name,
+									type: file.type || 'application/octet-stream',
+									dataUrl: String(reader.result),
+								});
+							reader.readAsDataURL(file);
+						}),
+				),
+			);
+			if (current.current === scope && generation === fileReadGeneration.current)
+				setAttachments((previous) => [...previous, ...added]);
+		} catch (cause) {
+			if (current.current === scope && generation === fileReadGeneration.current)
+				setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			if (generation === fileReadGeneration.current) setReadingFiles(false);
+		}
+	}
+	async function send(transcriptDraft?: string) {
+		const submittedDraft = transcriptDraft ?? draftRef.current;
 		const conversationId = p.conversation?.id;
-		const text = draft.trim();
-		if (!text || submitting) return;
+		const text = submittedDraft.trim();
+		if (
+			(!text && !attachments.length) ||
+			readingFiles ||
+			submitting ||
+			(dictating && transcriptDraft === undefined)
+		)
+			return;
 		setSubmitting(true);
 		setError('');
 		try {
@@ -257,7 +331,8 @@ export default function BotsWorkspace(p: BotsWorkspaceProps) {
 					end: item.end - leading,
 				})),
 			);
-			await p.onSend(text, reply?.id, mentions);
+			await p.onSend(text, reply?.id, mentions, attachments);
+			if (current.current === conversationId) setAttachments([]);
 			if (current.current === conversationId && draftRef.current === submittedDraft)
 				changeDraft('');
 			if (current.current === conversationId) setReply(undefined);
@@ -452,13 +527,62 @@ export default function BotsWorkspace(p: BotsWorkspaceProps) {
 							</button>
 						</div>
 					)}
+					{attachments.length > 0 && (
+						<div className="bots-attachment-previews" aria-label="Attachments to send">
+							{attachments.map((attachment, index) => (
+								<div className="bots-attachment-preview" key={index}>
+									<BotAttachments attachments={[attachment]} />
+									<button
+										type="button"
+										className="icon-button"
+										disabled={submitting || readingFiles}
+										aria-label={`Remove ${attachment.name}`}
+										onClick={() =>
+											setAttachments((items) => items.filter((_, itemIndex) => itemIndex !== index))
+										}
+									>
+										<X size={14} />
+									</button>
+								</div>
+							))}
+						</div>
+					)}
 					<form
 						className="bots-composer"
+						data-keyboard-focus={composerKeyboardFocus}
+						onPointerDownCapture={() => setComposerKeyboardFocus(false)}
+						onKeyDownCapture={(event) => {
+							if (event.key === 'Tab') setComposerKeyboardFocus(true);
+						}}
+						onBlurCapture={(event) => {
+							if (!event.currentTarget.contains(event.relatedTarget)) setComposerKeyboardFocus(true);
+						}}
 						onSubmit={(event) => {
 							event.preventDefault();
 							void send();
 						}}
 					>
+						<input
+							ref={fileInput}
+							type="file"
+							multiple
+							hidden
+							onChange={(event) => {
+								const files = Array.from(event.target.files || []);
+								event.target.value = '';
+								if (files.length) void attachFiles(files);
+							}}
+						/>
+						<button
+							type="button"
+							className="icon-button bots-attach"
+							aria-label="Add attachments"
+							title="Add attachments"
+							disabled={submitting || readingFiles || attachments.length >= 6}
+							onClick={() => fileInput.current?.click()}
+						>
+							<Plus size={20} />
+						</button>
 						<BotMentionInput
 							ref={composer}
 							label="Message your bot"
@@ -469,27 +593,38 @@ export default function BotsWorkspace(p: BotsWorkspaceProps) {
 							onChange={changeDraft}
 							onSubmit={() => void send()}
 						/>
-						{busy && !draft.trim() && p.onStop ? (
-							<button
-								className="bots-send"
-								type="button"
-								aria-label="Stop reply"
-								title="Stop this reply; background jobs and delegated tasks continue"
-								disabled={stopping}
-								onClick={() => void stop()}
-							>
-								<Square size={12} fill="currentColor" />
-							</button>
-						) : (
-							<button
-								className="bots-send"
-								type="submit"
-								aria-label="Send message"
-								disabled={!draft.trim() || submitting}
-							>
-								<ArrowUp size={19} strokeWidth={2.5} />
-							</button>
+						{p.onDictationSettings && (
+							<DictationButton
+								settings={p.dictation}
+								connection={p.dictationConnection}
+								scope={dictationScope}
+								disabled={submitting}
+								canSend={!submitting}
+								onConfigure={p.onDictationSettings}
+								onActiveChange={(active) => {
+									if (activeDictationScope.current !== dictationScope) return;
+									setDictationSession(active ? dictationScope : undefined);
+								}}
+								onTranscript={async (text, intent) => {
+									if (activeDictationScope.current !== dictationScope) return;
+									const content = draftRef.current;
+									const next = `${content}${content && !/\s$/.test(content) ? ' ' : ''}${text}`;
+									changeDraft(next, draftMentions);
+									composer.current?.focus();
+									if (intent === 'send') await send(next);
+								}}
+							/>
 						)}
+						<button
+							className="bots-send"
+							type="submit"
+							aria-label="Send message"
+							disabled={
+								(!draft.trim() && !attachments.length) || readingFiles || submitting || dictating
+							}
+						>
+							<ArrowUp size={19} strokeWidth={2.5} />
+						</button>
 					</form>
 				</div>
 			</div>
@@ -665,6 +800,7 @@ const BotMessageBubble = memo(function BotMessageBubble({
 				) : (
 					<div className="bot-message-bubble">
 						{replyText && <span className="bot-message-reply">{replyText}</span>}
+						<BotAttachments attachments={message.attachments || []} />
 						{editing ? (
 							<div className="bots-edit-message">
 								<BotMentionInput
@@ -1186,6 +1322,44 @@ function GroupReplyLimit({ value, onSave }: { value: number; onSave: (value: num
 					{userFacingError(error)}
 				</p>
 			)}
+		</div>
+	);
+}
+
+function BotAttachments({ attachments }: { attachments: Attachment[] }) {
+	return (
+		<div className="bots-message-attachments">
+			{attachments.map((attachment, index) => (
+				<BotAttachment key={index} attachment={attachment} />
+			))}
+		</div>
+	);
+}
+
+function BotAttachment({ attachment }: { attachment: Attachment }) {
+	const [failedSource, setFailedSource] = useState<string>();
+	const type = attachment.type.toLowerCase();
+	const safe = attachment.dataUrl.startsWith(`data:${type};base64,`);
+	if (!safe) return <span>{attachment.name} (unavailable)</span>;
+	const failed = failedSource === attachment.dataUrl;
+	const onError = () => setFailedSource(attachment.dataUrl);
+	return (
+		<div className="bots-media-attachment">
+			{failed ? (
+				<span role="status">Preview unavailable. Download to open this file.</span>
+			) : /^image\/(png|jpeg|gif|webp)$/.test(type) ? (
+				<img src={attachment.dataUrl} alt={attachment.name} loading="lazy" onError={onError} />
+			) : /^audio\/(mpeg|mp4|ogg|wav|webm|x-wav)$/.test(type) ? (
+				<audio src={attachment.dataUrl} controls preload="none" onError={onError} />
+			) : /^video\/(mp4|webm|ogg|quicktime)$/.test(type) ? (
+				<video src={attachment.dataUrl} controls preload="metadata" onError={onError} />
+			) : null}
+			<a
+				href={`data:application/octet-stream;base64,${attachment.dataUrl.split(',')[1]}`}
+				download={attachment.name}
+			>
+				{attachment.name}
+			</a>
 		</div>
 	);
 }

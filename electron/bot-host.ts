@@ -1,3 +1,6 @@
+import { resolveBotThreadAttachments } from '../src/lib/bot-thread-attachments';
+import { botProviderMessagesWithPdf } from './bot-pdf-attachments';
+import { validBotAttachments } from '../src/lib/bot-attachments';
 import {
 	BotExecutionStore,
 	type BotExecutionAction,
@@ -160,6 +163,7 @@ export interface BotHostOptions {
 	filename: string;
 	/** Fires after a mailbox commit, including activity transitions (never each token). */
 	onChanged?: () => void;
+	onResponseCompleted?: (conversationId: string, message: BotMessage, title: string) => void;
 	identity: () => Promise<BotHostIdentity>;
 	workspace: () => Promise<AppState | null>;
 	request?: typeof performRequest;
@@ -567,7 +571,41 @@ export class BotHost {
 				'The bot mailbox exceeds its 64 MiB storage limit. Remove older conversations to continue.',
 			);
 		await atomicWrite(this.options.filename, payload);
+		const arrivals =
+			this.initialized && this.options.onResponseCompleted
+				? updated.conversations.flatMap((conversation) => {
+						const old = new Map(
+							this.store.conversations
+								.find((c) => c.id === conversation.id)
+								?.messages.map((m) => [m.id, m]) ?? [],
+						);
+						return conversation.messages
+							.filter(
+								(m) =>
+									m.role === 'bot' &&
+									m.status === 'completed' &&
+									m.content.trim() &&
+									old.get(m.id)?.status !== 'completed',
+							)
+							.map((message) => ({
+								conversationId: conversation.id,
+								message,
+								title: updated.bots.find((b) => b.id === message.author?.botId)?.name ?? 'Bot',
+							}));
+					})
+				: [];
 		this.store = updated;
+		for (const arrival of arrivals) {
+			try {
+				await this.options.onResponseCompleted?.(
+					arrival.conversationId,
+					arrival.message,
+					arrival.title,
+				);
+			} catch {
+				/* Notification effects cannot fail a durable mailbox. */
+			}
+		}
 		try {
 			this.options.onChanged?.();
 		} catch {
@@ -608,7 +646,7 @@ export class BotHost {
 			})),
 		};
 	}
-	async command(command: BotCommand, remote = false): Promise<BotCommandResult> {
+	async command(command: BotCommand, remote = false, authorizeCommit?: () => void): Promise<BotCommandResult> {
 		validateBotCommand(command);
 		if (this.closed) throw new Error('FreeLM is shutting down.');
 		const host = await this.options.identity();
@@ -648,6 +686,8 @@ export class BotHost {
 				}
 		const jobs: ReplyJob[] = [];
 		const result = await this.serial(async () => {
+            // A mobile authorization lease may expire while identity/roster loading awaits.
+            authorizeCommit?.();
 			const next = structuredClone(this.store);
 			const now = Date.now();
 			const ids: Omit<BotCommandResult, 'snapshot'> = {};
@@ -834,6 +874,7 @@ export class BotHost {
 						if (
 							existing.role !== 'user' ||
 							existing.content !== command.content.trim() ||
+							JSON.stringify(existing.attachments ?? []) !== JSON.stringify(command.attachments ?? []) ||
 							existing.replyTo !== command.replyTo ||
 							JSON.stringify(existing.mentions ?? []) !== JSON.stringify(mentions)
 						)
@@ -854,6 +895,7 @@ export class BotHost {
 						id: command.messageId,
 						role: 'user',
 						content: command.content.trim(),
+						...(command.attachments?.length ? { attachments: structuredClone(command.attachments) } : {}),
 						createdAt: now,
 						updatedAt: now,
 						status: 'completed',
@@ -1951,6 +1993,7 @@ export class BotHost {
 				role: 'bot',
 				author: job.participant,
 				content: sent.content,
+				...(sent.attachments?.length ? { attachments: structuredClone(sent.attachments) } : {}),
 				createdAt: sent.createdAt,
 				updatedAt: sent.createdAt,
 				status: 'completed',
@@ -2875,7 +2918,7 @@ export class BotHost {
 			for (const message of saved.result.messages ?? []) await onMessage?.(message);
 			return saved.result;
 		}
-		const messages: Record<string, unknown>[] = saved?.messages ?? [...context.messages];
+		const messages: Record<string, unknown>[] = saved?.messages ?? await botProviderMessagesWithPdf(input.messages, { hostId: host.id, botId: bot.id }, connection, bot.model, signal);
 		if (!saved) {
 			const prior = (
 				await this.execution.listRuns({ botId: bot.id, conversationId: input.conversationId })
@@ -2954,7 +2997,7 @@ export class BotHost {
 						input.messages.push(message);
 					}
 					messages.push(
-						...buildBotMessageContext(steering, { hostId: host.id, botId: bot.id }).messages,
+						...await botProviderMessagesWithPdf(steering, { hostId: host.id, botId: bot.id }, connection, bot.model, signal),
 					);
 					await checkpoint();
 				}
@@ -3068,6 +3111,9 @@ export class BotHost {
 				};
 				const wire: WireRequest = {
 					id: randomUUID(),
+					connectionId: connection.id,
+					providerCaller: { surface: 'bot', botId: bot.id, remote },
+					...(connection.providerAdapter ? { providerAdapterRequired: true } : {}),
 					baseUrl: connection.baseUrl,
 					apiKey: connection.apiKey,
 					method: 'POST',
@@ -3228,13 +3274,36 @@ export class BotHost {
 							);
 						} else if (call.name === 'bot_send_message') {
 							if (
-								Object.keys(args).some((key) => key !== 'text') ||
+								Object.keys(args).some((key) => key !== 'text' && key !== 'attachmentRefs') ||
 								typeof args.text !== 'string' ||
-								!args.text.trim() ||
+								(!args.text.trim() && !(Array.isArray(args.attachmentRefs) && args.attachmentRefs.length)) ||
 								args.text.length > MAX_BOT_MESSAGE
 							)
 								throw new Error('Write a concise text message.');
+                            const workspaceRefs = Array.isArray(args.attachmentRefs) ? args.attachmentRefs.filter(ref => typeof ref === 'string' && ref.startsWith('thread-asset:')) : [];
+                            let workspaceAttachments: import('../src/types').Attachment[] = [];
+                            if (workspaceRefs.length) {
+                                const liveDefinitions = (await this.options.taskToolDefinitions?.(liveBot)) ?? [];
+                                if (remote || !liveBot.historyAccess || !liveDefinitions.some(tool => tool.name === 'threads_read')) throw new Error('Workspace attachment delivery requires current local thread access.');
+                                const currentWorkspace = await this.options.workspace();
+                                if (!currentWorkspace) throw new Error('Workspace unavailable.');
+                                workspaceAttachments = resolveBotThreadAttachments(workspaceRefs, currentWorkspace, host.id, true);
+                            }
+                            const attachments = args.attachmentRefs === undefined ? [] : (() => {
+                                if (!Array.isArray(args.attachmentRefs) || args.attachmentRefs.length > 6) throw new Error('Choose up to six attachment references from this conversation.');
+                                return args.attachmentRefs.map((ref) => {
+                                    if (typeof ref === 'string' && ref.startsWith('thread-asset:')) return workspaceAttachments.shift()!;
+                                    if (typeof ref !== 'string') throw new Error('Invalid attachment reference.');
+                                    const match = /^bot-attachment:([^:]+):(\d+)$/.exec(ref);
+                                    const source = match && input.messages.find(m => m.id === match[1] && m.status === 'completed');
+                                    const attachment = source && source.attachments?.[Number(match![2])];
+                                    if (!attachment) throw new Error('This attachment is unavailable in the current conversation.');
+                                    return structuredClone(attachment);
+                                });
+                            })();
+                            if (!validBotAttachments(attachments)) throw new Error('Attachments exceed the message limit.');
 							const message = {
+                                ...(attachments.length ? { attachments } : {}),
 								id: action!.id,
 								content: args.text.trim(),
 								createdAt: action!.createdAt,
@@ -3657,6 +3726,7 @@ function memoryMessageHash(message: BotMessage): string {
 				message.role,
 				message.author,
 				message.content,
+				...(message.attachments?.length ? [message.attachments] : []),
 				message.status,
 				message.editedAt,
 				message.unsentAt,

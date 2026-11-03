@@ -1,3 +1,8 @@
+import Marketplace from './Marketplace';
+import PanelHeader from './PanelHeader';
+import Button, { IconButton as SharedIconButton } from './Button';
+import SearchField from './SearchField';
+import FilePicker from './FilePicker';
 import { userFacingError } from '../lib/user-facing-error';
 import {
 	useCallback,
@@ -43,7 +48,6 @@ import {
 	Redo2,
 	Repeat2,
 	RotateCcw,
-	Search,
 	Settings2,
 	SlidersHorizontal,
 	Square,
@@ -72,6 +76,7 @@ import {
 	compatibleWorkflowPorts,
 	createWorkflow,
 	createWorkflowNode,
+	definitionForNode,
 	WORKFLOW_CATALOG,
 	WORKFLOW_NODE_MAP,
 	WORKFLOW_PORT_COLORS,
@@ -93,6 +98,7 @@ import { normalizeWorkflowInputs } from '../lib/workflow-inputs';
 import './workflows.css';
 
 const icons: Record<WorkflowNodeType, LucideIcon> = {
+	custom: FileCode2,
 	entry: Play,
 	schedule: Clock3,
 	event: Zap,
@@ -130,11 +136,7 @@ const activeRun = (run?: WorkflowRun) =>
 	!!run && ['queued', 'running', 'waiting'].includes(run.status);
 const nodeHeight = (node: WorkflowNode) =>
 	109 +
-	Math.max(
-		WORKFLOW_NODE_MAP[node.type].inputs.length,
-		WORKFLOW_NODE_MAP[node.type].outputs.length,
-	) *
-		27;
+	Math.max(definitionForNode(node).inputs.length, definitionForNode(node).outputs.length) * 27;
 const modelKind = (type: WorkflowNodeType): ModelKind =>
 	type === 'image'
 		? 'images'
@@ -169,7 +171,10 @@ export function useWorkflowsWorkspace(
 	options: WorkflowsWorkspaceOptions = {},
 ) {
 	const [snapshot, setSnapshot] = useState<WorkflowSnapshot>(emptySnapshot);
+	const definitionVersions = useRef(snapshot.definitionVersions);
+	definitionVersions.current = snapshot.definitionVersions;
 	const [selectedId, setSelectedId] = useState<string>();
+	const [notificationRunId, setNotificationRunId] = useState<string>();
 	const [localBindingId, setLocalBindingId] = useState<string>();
 	const [localProjectId, setLocalProjectId] = useState<string>();
 	const [editingBinding, setEditingBinding] = useState(false);
@@ -218,6 +223,7 @@ export function useWorkflowsWorkspace(
 				workflow: WorkflowDefinition;
 				bindingId?: string;
 				expectedRevision?: number;
+				expectedContentHash?: string;
 				timer?: ReturnType<typeof setTimeout>;
 			}
 		>(),
@@ -249,9 +255,15 @@ export function useWorkflowsWorkspace(
 				workflowSnapshot:
 					pending.current.get(`binding:${binding.id}`)?.workflow ?? binding.workflowSnapshot,
 			})),
-			workflows: next.workflows.map(
-				(workflow) => pending.current.get(workflow.id)?.workflow ?? workflow,
-			),
+			workflows: [
+				...next.workflows.map((workflow) => pending.current.get(workflow.id)?.workflow ?? workflow),
+				...[...pending.current.values()]
+					.filter(
+						(draft) =>
+							!draft.bindingId && !next.workflows.some((item) => item.id === draft.workflow.id),
+					)
+					.map((draft) => draft.workflow),
+			],
 		}));
 	}, []);
 	const command = useCallback(
@@ -299,13 +311,25 @@ export function useWorkflowsWorkspace(
 										name: draft.workflow.name,
 										expectedRevision: draft.expectedRevision,
 									}
-								: { type: 'save', workflow: draft.workflow },
+								: {
+										type: 'save',
+										workflow: draft.workflow,
+										expectedRevision: draft.expectedRevision,
+										expectedContentHash: draft.expectedContentHash,
+									},
 						);
 						if (draft.bindingId) {
 							const next = pending.current.get(`binding:${draft.bindingId}`);
 							const saved = result.bindings?.find((binding) => binding.id === draft.bindingId);
 							if (next && saved && next.expectedRevision === draft.expectedRevision)
 								next.expectedRevision = saved.revision;
+						} else {
+							const queued = pending.current.get(draft.workflow.id),
+								version = result.definitionVersions?.[draft.workflow.id];
+							if (queued && version && queued.expectedContentHash === draft.expectedContentHash) {
+								queued.expectedRevision = version.revision;
+								queued.expectedContentHash = version.contentHash;
+							}
 						}
 						savedCount++;
 					}
@@ -319,6 +343,7 @@ export function useWorkflowsWorkspace(
 								workflow: draft.workflow,
 								bindingId: draft.bindingId,
 								expectedRevision: draft.expectedRevision,
+								expectedContentHash: draft.expectedContentHash,
 							});
 					}
 					setSnapshot((previous) => ({
@@ -354,6 +379,10 @@ export function useWorkflowsWorkspace(
 			if (previous) clearTimeout(previous.timer);
 			pending.current.set(workflow.id, {
 				workflow,
+				expectedRevision:
+					previous?.expectedRevision ?? definitionVersions.current?.[workflow.id]?.revision,
+				expectedContentHash:
+					previous?.expectedContentHash ?? definitionVersions.current?.[workflow.id]?.contentHash,
 				timer: setTimeout(() => {
 					void flushDrafts().catch(() => {});
 				}, 550),
@@ -515,27 +544,36 @@ export function useWorkflowsWorkspace(
 	);
 	const panel = (
 		<div className="sidebar-panel workflows-sidebar">
-			<div className="sidebar-panel-header">
-				<h2>Workflows</h2>
-				<button
-					className="workflow-icon-button"
-					title="New workflow"
-					aria-label="New workflow"
-					onClick={() => void create()}
-					disabled={busy}
-				>
-					<Plus size={18} />
-				</button>
-			</div>
-			<label className="workflow-search">
-				<Search size={15} />
-				<input
-					aria-label="Search workflows"
-					placeholder="Search"
-					value={search}
-					onChange={(event) => setSearch(event.target.value)}
-				/>
-			</label>
+			<PanelHeader
+				title="Workflows"
+				actions={
+					<>
+						<SharedIconButton
+							label="Refresh definitions from disk"
+							icon={RotateCcw}
+							disabled={busy}
+							onClick={() => {
+								void command({ type: 'refresh-definitions' }).catch((failure) =>
+									setError(errorMessage(failure)),
+								);
+							}}
+						/>
+						<SharedIconButton
+							label="New workflow"
+							icon={Plus}
+							onClick={() => void create()}
+							disabled={busy}
+						/>
+					</>
+				}
+			></PanelHeader>
+			<SearchField
+				className="workflow-search"
+				label="Search workflows"
+				placeholder="Search"
+				value={search}
+				onValueChange={setSearch}
+			/>
 			<div className="workflow-sidebar-heading">
 				Your workflows <span>{snapshot.workflows.length}</span>
 			</div>
@@ -584,6 +622,66 @@ export function useWorkflowsWorkspace(
 	);
 	const content = (
 		<div className="workflows-workspace">
+			{!!snapshot.definitionErrors?.length && (
+				<div className="workflow-error" role="status">
+					{snapshot.definitionErrors.map((item) => `${item.file}: ${item.message}`).join(' · ')}
+				</div>
+			)}
+			{error && !bindingId && selectedId && pending.current.has(selectedId) && (
+				<div className="workflow-error">
+					<Button
+						size="compact"
+						disabled={busy}
+						onClick={async () => {
+							const draft = pending.current.get(selectedId)!;
+							const copy = {
+								...draft.workflow,
+								id: crypto.randomUUID(),
+								name: `${draft.workflow.name} copy`.slice(0, 200),
+								enabled: false,
+								revision: undefined,
+							};
+							setBusy(true);
+							try {
+								await command({ type: 'save', workflow: copy });
+								clearTimeout(draft.timer);
+								pending.current.delete(selectedId);
+								setSelectedId(copy.id);
+								setSaving(pending.current.size > 0);
+								setError('');
+								await refresh();
+							} catch (failure) {
+								setError(errorMessage(failure));
+							} finally {
+								setBusy(false);
+							}
+						}}
+					>
+						Keep draft as copy
+					</Button>
+					<Button
+						size="compact"
+						disabled={busy}
+						onClick={async () => {
+							setBusy(true);
+							clearTimeout(pending.current.get(selectedId)?.timer);
+							pending.current.delete(selectedId);
+							setSaving(pending.current.size > 0);
+							try {
+								await command({ type: 'refresh-definitions' });
+								setEditorGeneration((value) => value + 1);
+								setError('');
+							} catch (failure) {
+								setError(errorMessage(failure));
+							} finally {
+								setBusy(false);
+							}
+						}}
+					>
+						Discard draft and reload
+					</Button>
+				</div>
+			)}
 			{error && (
 				<div className="workflow-error" role="alert">
 					<span>{userFacingError(error)}</span>
@@ -686,6 +784,7 @@ export function useWorkflowsWorkspace(
 						</div>
 					)}
 					<WorkflowEditor
+						notificationRunId={notificationRunId}
 						key={`${editingBinding ? selectedBinding?.id : selected.id}:${editorGeneration}`}
 						bindingId={editingBinding ? selectedBinding?.id : undefined}
 						initial={selected}
@@ -704,6 +803,7 @@ export function useWorkflowsWorkspace(
 						}
 						connections={hostConnections}
 						saving={saving}
+						saveFailed={saving && !!error}
 						busy={busy}
 						onChange={editingBinding ? changeProjectWorkflow : change}
 						onCommand={(value) =>
@@ -775,6 +875,23 @@ export function useWorkflowsWorkspace(
 		</div>
 	);
 	return {
+		openNotification: async (runId: string) => {
+			await flushDrafts();
+			const next = await window.desktop?.workflowSnapshot?.();
+			const run = next?.runs.find((r) => r.id === runId);
+			if (!next || !run) throw new Error('This workflow run is no longer available.');
+			const binding = run.bindingId
+				? next.bindings?.find((b) => b.id === run.bindingId)
+				: undefined;
+			if (!binding && !next.workflows.some((w) => w.id === run.workflowId))
+				throw new Error('This workflow is no longer available.');
+			apply(next);
+			setSearch('');
+			openBinding(binding?.id);
+			setEditingBinding(!!binding);
+			setSelectedId(run.workflowId);
+			setNotificationRunId(runId);
+		},
 		title:
 			selectedBinding?.name ||
 			selectedBinding?.workflowSnapshot.name ||
@@ -791,11 +908,13 @@ export function useWorkflowsWorkspace(
 }
 
 interface EditorProps {
+	notificationRunId?: string;
 	bindingId?: string;
 	initial: WorkflowDefinition;
 	snapshot: WorkflowSnapshot;
 	connections: Connection[];
 	saving: boolean;
+	saveFailed?: boolean;
 	busy: boolean;
 	onChange: (workflow: WorkflowDefinition) => void;
 	onCommand: (command: WorkflowCommand) => Promise<WorkflowSnapshot | undefined>;
@@ -814,6 +933,7 @@ function WorkflowEditor(p: EditorProps) {
 	const [selectedNode, setSelectedNode] = useState<string>();
 	const [selectedEdge, setSelectedEdge] = useState<string>();
 	const [palette, setPalette] = useState(false);
+	const [marketplace, setMarketplace] = useState(false);
 	const [paletteSearch, setPaletteSearch] = useState('');
 	const [inspector, setInspector] = useState(true);
 	const [view, setView] = useState(p.initial.viewport ?? { x: 0, y: 0, zoom: 1 });
@@ -826,7 +946,10 @@ function WorkflowEditor(p: EditorProps) {
 
 	const [showRunInput, setShowRunInput] = useState(false);
 	const [confirmDelete, setConfirmDelete] = useState(false);
-	const [selectedRunId, setSelectedRunId] = useState('');
+	const [selectedRunId, setSelectedRunId] = useState(p.notificationRunId ?? '');
+	useEffect(() => {
+		if (p.notificationRunId) setSelectedRunId(p.notificationRunId);
+	}, [p.notificationRunId]);
 	const [historyVersion, setHistoryVersion] = useState(0);
 	const undoStack = useRef<WorkflowDefinition[]>([]);
 	const redoStack = useRef<WorkflowDefinition[]>([]);
@@ -1100,7 +1223,7 @@ function WorkflowEditor(p: EditorProps) {
 				);
 				const targetPort =
 					targetNode &&
-					WORKFLOW_NODE_MAP[targetNode.type].inputs.find(
+					definitionForNode(targetNode).inputs.find(
 						(item) => item.id === target?.dataset.workflowInput,
 					);
 				if (targetNode && targetPort) connect(targetNode, targetPort.id, targetPort.type);
@@ -1119,15 +1242,30 @@ function WorkflowEditor(p: EditorProps) {
 			commit(current.current, false);
 		}
 	}
-	function addNode(type: WorkflowNodeType, dropPosition?: { x: number; y: number }) {
+	function addNode(
+		type: WorkflowNodeType,
+		dropPosition?: { x: number; y: number },
+		custom?: NonNullable<WorkflowSnapshot['customNodes']>[number],
+	) {
 		const rect = canvas.current!.getBoundingClientRect();
 		const item = createWorkflowNode(
-			type,
+			custom ? 'value' : type,
 			dropPosition ?? {
 				x: Math.round(((rect.width / 2 - view.x) / view.zoom - 112) / 8) * 8,
 				y: Math.round(((rect.height / 2 - view.y) / view.zoom - 80) / 8) * 8,
 			},
 		);
+		if (custom) {
+			item.type = 'custom';
+			item.label = custom.manifest.title;
+			item.config = {};
+			item.custom = {
+				packageId: custom.manifest.id,
+				version: custom.manifest.version,
+				digest: custom.digest,
+				definition: structuredClone(custom.manifest),
+			};
+		}
 		if (modelTypes.includes(type) && p.connections[0]) {
 			item.config.connectionId = p.connections[0].id;
 			item.config.model = p.connections[0].models[modelKind(type)];
@@ -1187,7 +1325,7 @@ function WorkflowEditor(p: EditorProps) {
 		setNotice('');
 	}
 	const portPoint = (item: WorkflowNode, id: string | undefined, output: boolean) => {
-		const ports = WORKFLOW_NODE_MAP[item.type][output ? 'outputs' : 'inputs'];
+		const ports = definitionForNode(item)[output ? 'outputs' : 'inputs'];
 		const index = Math.max(
 			0,
 			ports.findIndex((port) => port.id === (id || (output ? 'value' : 'input'))),
@@ -1223,7 +1361,8 @@ function WorkflowEditor(p: EditorProps) {
 						}}
 					/>
 					<small>
-						{p.saving ? 'Saving…' : 'Saved on this computer'} · {draft.nodes.length} nodes
+						{p.saveFailed ? 'Unsaved changes' : p.saving ? 'Saving…' : 'Saved on this computer'} ·{' '}
+						{draft.nodes.length} nodes
 					</small>
 				</div>
 				<div className="workflow-toolbar-group">
@@ -1430,9 +1569,8 @@ function WorkflowEditor(p: EditorProps) {
 									portPoint(target, item.targetHandle, false),
 								);
 								const type =
-									WORKFLOW_NODE_MAP[source.type].outputs.find(
-										(port) => port.id === item.sourceHandle,
-									)?.type ?? 'any';
+									definitionForNode(source).outputs.find((port) => port.id === item.sourceHandle)
+										?.type ?? 'any';
 								return (
 									<g
 										key={item.id}
@@ -1472,7 +1610,7 @@ function WorkflowEditor(p: EditorProps) {
 							)}
 						</svg>
 						{draft.nodes.map((item) => {
-							const definition = WORKFLOW_NODE_MAP[item.type];
+							const definition = definitionForNode(item);
 							const Icon = icons[item.type];
 							const state = run?.nodes[item.id];
 							return (
@@ -1503,7 +1641,17 @@ function WorkflowEditor(p: EditorProps) {
 											{state ? <RunIcon status={state.status} /> : <Circle size={10} />}
 										</div>
 									</div>
-									<div className="workflow-node-summary">{nodeSummary(item)}</div>
+									<div className="workflow-node-summary">
+										{item.type === 'custom' &&
+										!p.snapshot.customNodes?.some(
+											(entry) =>
+												entry.manifest.id === item.custom?.packageId &&
+												entry.manifest.version === item.custom?.version &&
+												entry.digest === item.custom?.digest,
+										)
+											? 'Unavailable · reinstall this package version'
+											: nodeSummary(item)}
+									</div>
 									<div className="workflow-node-ports">
 										<div>
 											{definition.inputs.map((port) => (
@@ -1590,23 +1738,110 @@ function WorkflowEditor(p: EditorProps) {
 							: 'Drag to pan · ⌘ / Ctrl + scroll to zoom'}
 					</div>
 					{draft.nodes.length > 0 && <Minimap nodes={draft.nodes} selected={selectedNode} />}
+					{marketplace && (
+						<section className="marketplace-node-overlay" aria-label="Workflow node marketplace">
+							<Button onClick={() => setMarketplace(false)}>Close marketplace</Button>
+							<Marketplace
+								type="node"
+								disabled={p.busy}
+								onReviewPackage={async (bytes) => {
+									await p.onCommand({
+										type: 'install-custom-node',
+										source: new TextDecoder().decode(bytes),
+									});
+								}}
+							/>
+						</section>
+					)}
 					{palette && (
 						<div className="workflow-palette">
 							<div className="workflow-palette-header">
 								<strong>Add a node</strong>
+								<Button
+									onClick={() => {
+										setPalette(false);
+										setMarketplace(true);
+									}}
+								>
+									Marketplace…
+								</Button>
 								<IconButton label="Close node palette" icon={X} onClick={() => setPalette(false)} />
 							</div>
-							<label className="workflow-search">
-								<Search size={14} />
-								<input
-									aria-label="Search nodes"
-									autoFocus
-									placeholder="Search nodes…"
-									value={paletteSearch}
-									onChange={(event) => setPaletteSearch(event.target.value)}
-								/>
-							</label>
+							<SearchField
+								className="workflow-search"
+								label="Search nodes"
+								autoFocus
+								placeholder="Search nodes…"
+								value={paletteSearch}
+								onValueChange={setPaletteSearch}
+							/>
 							<div className="workflow-palette-list">
+								<SettingsGroup title="Custom nodes">
+									<SettingsRow
+										layout="stacked"
+										label="Install package"
+										description={
+											<span id="custom-node-package-help">
+												Choose a .freelm-node JSON package containing its manifest and TypeScript
+												source.
+											</span>
+										}
+									>
+										<FilePicker
+											label="Install custom node package"
+											buttonLabel="Choose package…"
+											busyLabel="Installing package…"
+											describedBy="custom-node-package-help"
+											accept=".freelm-node,.json,application/json"
+											disabled={p.busy}
+											onFile={async (file) => {
+												try {
+													await p.onCommand({
+														type: 'install-custom-node',
+														source: await file.text(),
+													});
+												} catch (error) {
+													setNotice(userFacingError(error));
+												}
+											}}
+										/>
+									</SettingsRow>
+									{(p.snapshot.customNodes ?? [])
+										.filter((entry) =>
+											`${entry.manifest.title} ${entry.manifest.description}`
+												.toLocaleLowerCase()
+												.includes(paletteSearch.toLocaleLowerCase()),
+										)
+										.map((entry) => (
+											<SettingsRow
+												key={`${entry.manifest.id}@${entry.manifest.version}`}
+												layout="stacked"
+												label={entry.manifest.title}
+												description={`${entry.manifest.version} · ${entry.manifest.description}`}
+											>
+												<CustomNodeServices entry={entry} onCommand={p.onCommand} busy={p.busy} />
+												<button
+													className="workflow-button"
+													onClick={() => addNode('custom', undefined, entry)}
+												>
+													Add
+												</button>
+												<IconButton
+													label={`Remove ${entry.manifest.title} ${entry.manifest.version}`}
+													icon={Trash2}
+													onClick={() => {
+														void p
+															.onCommand({
+																type: 'remove-custom-node',
+																packageId: entry.manifest.id,
+																version: entry.manifest.version,
+															})
+															.catch((error: unknown) => setNotice(userFacingError(error)));
+													}}
+												/>
+											</SettingsRow>
+										))}
+								</SettingsGroup>
 								{categories.map((category) => {
 									const entries = paletteItems.filter((item) => item.category === category);
 									return entries.length ? (
@@ -1661,6 +1896,7 @@ function WorkflowEditor(p: EditorProps) {
 								onChange={updateNode}
 								onWorkflowChange={commit}
 								onCatalog={p.onCatalog}
+								onCommand={p.onCommand}
 								onDuplicate={() => {
 									const copy = {
 										...structuredClone(node),
@@ -1879,6 +2115,7 @@ function NodeInspector({
 	connections,
 	onChange,
 	onCatalog,
+	onCommand,
 	onDuplicate,
 	onDelete,
 	onClose,
@@ -1892,11 +2129,12 @@ function NodeInspector({
 	onChange: (node: WorkflowNode) => void;
 	onWorkflowChange: (workflow: WorkflowDefinition) => void;
 	onCatalog: () => void;
+	onCommand: EditorProps['onCommand'];
 	onDuplicate: () => void;
 	onDelete: () => void;
 	onClose: () => void;
 }) {
-	const definition = WORKFLOW_NODE_MAP[node.type];
+	const definition = definitionForNode(node);
 	const Icon = icons[node.type];
 	const [search, setSearch] = useState('');
 	useEffect(() => {
@@ -1995,6 +2233,27 @@ function NodeInspector({
 			</div>
 			<div className="workflow-inspector-scroll">
 				<p className="workflow-inspector-description">{definition.description}</p>
+				{node.type === 'custom' && (
+					<SettingsGroup title="Custom package">
+						<SettingsRow
+							label={node.custom?.packageId ?? 'Unknown package'}
+							description={node.custom?.version ?? 'Missing version'}
+						/>
+						<SettingsRow
+							label="Availability"
+							description={
+								snapshot.customNodes?.some(
+									(entry) =>
+										entry.manifest.id === node.custom?.packageId &&
+										entry.manifest.version === node.custom?.version &&
+										entry.digest === node.custom?.digest,
+								)
+									? 'Installed'
+									: 'Unavailable. Reinstall the original package version to run this node. Saved ports and configuration are preserved.'
+							}
+						/>
+					</SettingsGroup>
+				)}
 				<SettingsGroup title="Node">
 					<SettingsRow label="Name" layout="stacked">
 						<input
@@ -2004,6 +2263,13 @@ function NodeInspector({
 						/>
 					</SettingsRow>
 				</SettingsGroup>
+				{node.type === 'custom' && node.custom?.definition.discovery && (
+					<CustomNodeDiscovery
+						key={`${node.id}:${node.custom.digest}`}
+						node={node}
+						onCommand={onCommand}
+					/>
+				)}
 				{node.type === 'entry' && (
 					<WorkflowRequestSettings workflow={workflow} onChange={onWorkflowChange} />
 				)}
@@ -2144,15 +2410,13 @@ function NodeInspector({
 						}
 					>
 						<SettingsRow layout="stacked">
-							<label className="workflow-search">
-								<Search size={14} />
-								<input
-									aria-label="Search tools and skills"
-									placeholder="Filter capabilities…"
-									value={search}
-									onChange={(event) => setSearch(event.target.value)}
-								/>
-							</label>
+							<SearchField
+								className="workflow-search"
+								label="Search tools and skills"
+								placeholder="Filter capabilities…"
+								value={search}
+								onValueChange={setSearch}
+							/>
 						</SettingsRow>
 						<SettingsRow label={`Tools (${selectedTools.length})`} layout="stacked">
 							<div className="workflow-tool-list">
@@ -2285,6 +2549,292 @@ function NodeInspector({
 	);
 }
 
+function CustomNodeDiscovery({
+	node,
+	onCommand,
+}: {
+	node: WorkflowNode;
+	onCommand: EditorProps['onCommand'];
+}) {
+	const [pending, setPending] = useState(false);
+	const [result, setResult] = useState<{ value: unknown }>();
+	const [error, setError] = useState('');
+	const request = useRef(0);
+	const configuration = JSON.stringify(node.config);
+	useEffect(() => {
+		request.current += 1;
+		setResult(undefined);
+		setError('');
+		setPending(false);
+		return () => {
+			request.current += 1;
+		};
+	}, [configuration]);
+	async function discover() {
+		if (!node.custom) return;
+		const id = ++request.current;
+		setPending(true);
+		setError('');
+		setResult(undefined);
+		try {
+			const response = await onCommand({
+				type: 'discover-custom-node',
+				packageId: node.custom.packageId,
+				version: node.custom.version,
+				digest: node.custom.digest,
+				config: structuredClone(node.config),
+			});
+			if (id !== request.current) return;
+			const discovery = response?.customNodeDiscovery;
+			if (
+				!discovery ||
+				discovery.packageId !== node.custom.packageId ||
+				discovery.version !== node.custom.version
+			) {
+				setError(
+					'Options could not be discovered. Check service authorization and configuration, then try again.',
+				);
+			} else {
+				setResult({ value: discovery.result });
+			}
+		} catch (failure) {
+			if (id === request.current) setError(userFacingError(failure));
+		} finally {
+			if (id === request.current) setPending(false);
+		}
+	}
+	return (
+		<SettingsGroup
+			title="Discover options"
+			description="Fetch available options using this node’s current configuration. This may contact authorized services."
+		>
+			<SettingsRow>
+				<button className="workflow-button" disabled={pending} onClick={() => void discover()}>
+					{pending ? 'Discovering…' : 'Discover options'}
+				</button>
+			</SettingsRow>
+			{error && (
+				<SettingsRow>
+					<p role="alert" className="workflow-help">
+						{error}
+					</p>
+				</SettingsRow>
+			)}
+			{result && (
+				<SettingsRow label="Available options" layout="stacked">
+					<pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+						{stringify(result.value)}
+					</pre>
+				</SettingsRow>
+			)}
+		</SettingsGroup>
+	);
+}
+
+function CustomNodeServices({
+	entry,
+	onCommand,
+	busy,
+}: {
+	entry: NonNullable<WorkflowSnapshot['customNodes']>[number];
+	onCommand: EditorProps['onCommand'];
+	busy: boolean;
+}) {
+	const credential = useRef<HTMLInputElement>(null);
+	const secretName = useRef<HTMLInputElement>(null);
+	const credentialHeader = useRef<HTMLInputElement>(null);
+	const credentialPrefix = useRef<HTMLInputElement>(null);
+	const [origin, setOrigin] = useState(entry.manifest.permissions.network?.[0] ?? '');
+	const [pending, setPending] = useState(false);
+	const [message, setMessage] = useState('');
+	const identity = {
+		packageId: entry.manifest.id,
+		version: entry.manifest.version,
+		digest: entry.digest,
+	};
+	const network = entry.manifest.permissions.network ?? [];
+	async function authorize(revoke: boolean) {
+		setPending(true);
+		setMessage('');
+		try {
+			const result = await onCommand({
+				type: 'authorize-custom-node',
+				...identity,
+				network: revoke ? [] : network,
+				inference: revoke ? false : !!entry.manifest.permissions.inference,
+			});
+			setMessage(
+				result
+					? revoke
+						? 'Service access revoked.'
+						: 'Service access authorized.'
+					: 'Service access could not be updated.',
+			);
+		} catch (error) {
+			setMessage(userFacingError(error));
+		} finally {
+			setPending(false);
+		}
+	}
+	async function saveCredential() {
+		const name = secretName.current?.value.trim() ?? '';
+		const value = credential.current?.value ?? '';
+		if (credential.current) credential.current.value = '';
+		if (!name || !value || !origin) {
+			setMessage('Enter a credential name, value, and service origin.');
+			return;
+		}
+		setPending(true);
+		setMessage('');
+		try {
+			const result = await onCommand({
+				type: 'set-custom-node-secret',
+				...identity,
+				name,
+				value,
+				origin,
+				header: credentialHeader.current?.value.trim() ?? 'Authorization',
+				prefix: credentialPrefix.current?.value ?? 'Bearer ',
+			});
+			setMessage(
+				result
+					? `Credential saved. Use ${name} as the secret reference.`
+					: 'Could not save the credential. Enter it again to retry.',
+			);
+		} catch {
+			setMessage('Could not save the credential. Enter it again to retry.');
+		} finally {
+			setPending(false);
+		}
+	}
+	return (
+		<details>
+			<summary style={{ fontSize: 'var(--font-size-ui)' }}>Services and credentials</summary>
+			<SettingsGroup title="Requested services">
+				<SettingsRow
+					label="Current access"
+					description={`Network: ${entry.grants?.network.join(', ') || 'None'}. Inference: ${entry.grants?.inference ? 'Allowed' : 'Not allowed'}.`}
+				/>
+				<SettingsRow
+					label="Network"
+					description={network.length ? network.join(', ') : 'No network access requested.'}
+				/>
+				<SettingsRow
+					label="Inference"
+					description={
+						entry.manifest.permissions.inference
+							? 'Requests inference access through all configured connections.'
+							: 'No inference access requested.'
+					}
+				/>
+				<SettingsRow
+					layout="stacked"
+					label="Authorization"
+					description="Authorize only services you want this package version to use. Installation does not grant access."
+				>
+					<button
+						className="workflow-button"
+						disabled={busy || pending}
+						onClick={() => void authorize(false)}
+					>
+						Authorize services
+					</button>
+					<button
+						className="workflow-button"
+						disabled={busy || pending}
+						onClick={() => void authorize(true)}
+					>
+						Revoke access
+					</button>
+				</SettingsRow>
+			</SettingsGroup>
+			{!!network.length && (
+				<SettingsGroup
+					title="Package credentials"
+					description="Credentials stay on this host. Workflow fields store only the credential name."
+				>
+					{!!entry.secrets?.length && (
+						<SettingsRow
+							label="Saved references"
+							description={entry.secrets
+								.map((secret) => `${secret.name} · ${secret.origin}`)
+								.join('; ')}
+						/>
+					)}
+					<SettingsRow label="Service origin" layout="stacked">
+						<Select
+							aria-label="Credential service origin"
+							value={origin}
+							options={network.map((value) => ({ value, label: value }))}
+							onChange={setOrigin}
+						/>
+					</SettingsRow>
+					<SettingsRow label="Credential name" layout="stacked">
+						<input
+							ref={secretName}
+							aria-label="Credential name"
+							autoComplete="off"
+							placeholder="service-key"
+						/>
+					</SettingsRow>
+					<SettingsRow
+						label="Header name"
+						layout="stacked"
+						description="For example, Authorization or X-API-Key."
+					>
+						<input
+							ref={credentialHeader}
+							aria-label="Credential header name"
+							defaultValue="Authorization"
+							autoComplete="off"
+							spellCheck={false}
+						/>
+					</SettingsRow>
+					<SettingsRow
+						label="Value prefix"
+						layout="stacked"
+						description="Include any required trailing space. Leave empty to send the credential alone."
+					>
+						<input
+							ref={credentialPrefix}
+							aria-label="Credential value prefix"
+							defaultValue="Bearer "
+							autoComplete="off"
+							spellCheck={false}
+						/>
+					</SettingsRow>
+					<SettingsRow
+						label="Credential value"
+						layout="stacked"
+						description="Sent only to the selected origin using the header and prefix below."
+					>
+						<input
+							ref={credential}
+							aria-label="Credential value"
+							type="password"
+							autoComplete="new-password"
+						/>
+					</SettingsRow>
+					<SettingsRow>
+						<button
+							className="workflow-button"
+							disabled={busy || pending}
+							onClick={() => void saveCredential()}
+						>
+							Save credential
+						</button>
+					</SettingsRow>
+				</SettingsGroup>
+			)}
+			{message && (
+				<p className="workflow-help" role="status">
+					{message}
+				</p>
+			)}
+		</details>
+	);
+}
+
 function ConfigField({
 	field,
 	value,
@@ -2349,7 +2899,11 @@ function ConfigField({
 	return (
 		<SettingsRow
 			label={field.label}
-			description={field.description}
+			description={
+				field.kind === 'secret'
+					? `${field.description ? `${field.description} ` : ''}Enter a saved credential name, never the credential value.`
+					: field.description
+			}
 			layout={field.kind === 'boolean' ? 'inline' : 'stacked'}
 		>
 			{control}
@@ -2418,15 +2972,13 @@ function IconButton({
 	disabled?: boolean;
 }) {
 	return (
-		<button
-			className="workflow-icon-button"
-			title={label}
-			aria-label={label}
+		<SharedIconButton
+			label={label}
+			icon={Icon}
 			onClick={onClick}
 			disabled={disabled}
-		>
-			<Icon size={16} />
-		</button>
+			size="compact"
+		/>
 	);
 }
 function RunIcon({ status }: { status: string }) {
@@ -2467,7 +3019,7 @@ function nodeSummary(node: WorkflowNode) {
 	if (node.type === 'collection')
 		return `${String(node.config.operation || 'list')} · ${String(node.config.name || 'records')}`;
 	if (node.type === 'output') return String(node.config.name || 'Workflow result');
-	return WORKFLOW_NODE_MAP[node.type].description;
+	return definitionForNode(node).description;
 }
 function outputSummary(output: Record<string, unknown>) {
 	const value = output.text ?? output.value ?? output;

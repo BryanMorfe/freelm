@@ -1,3 +1,4 @@
+import { standardThinkingMode } from '../../src/lib/catalog';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
@@ -126,6 +127,32 @@ function conversationRequest(request: WireRequest, api: 'responses' | 'chat/comp
 }
 
 describe('bot conversation metadata stays out of message text', () => {
+	it.each(['responses', 'chat/completions'] as const)(
+		'uses explicitly configured Standard mode for native bot requests on %s',
+		async (api) => {
+			const state = workspace(api);
+			state.connections[0].catalog![0].thinkingModes = [standardThinkingMode()];
+			const requests: WireRequest[] = [];
+			const { host } = await fixture(
+				{
+					request: async (wire) => {
+						requests.push(structuredClone(wire));
+						return answer('Standard reply', api);
+					},
+				},
+				state,
+			);
+			await send(host);
+			await host.idle();
+			expect(requests).toHaveLength(1);
+			for (const key of ['reasoning', 'reasoning_effort', 'useProviderDefaults'])
+				expect(requests[0].body).not.toHaveProperty(key);
+			expect((await host.snapshot()).conversations[0].messages.at(-1)?.content).toBe(
+				'Standard reply',
+			);
+		},
+	);
+
 	it.each(['responses', 'chat/completions'] as const)(
 		'sends texting guidance with %s history without stripping requested Markdown or saved content',
 		async (api) => {
@@ -1472,38 +1499,58 @@ describe('live bot reply activity', () => {
 		expect(final.status).toBe('completed');
 		expect(final.activity).toBeUndefined();
 	});
-	it('clears failed activity and rejects late output after unsending', async () => {
-		let emit!: (chunk: string) => void;
-		const { host } = await fixture({
-			request: async (_wire, callback, signal) => {
-				emit = callback;
-				return new Promise((_resolve, reject) =>
-					signal?.addEventListener('abort', () => reject(signal.reason), { once: true }),
-				);
-			},
-		});
-		await send(host);
-		await vi.waitFor(() => expect(emit).toBeTypeOf('function'));
-		emit(sse({ type: 'response.output_text.delta', delta: 'Draft' }));
-		await host.command({ type: 'unsend', conversationId: 'dm', messageId: 'hello' });
-		expect(() => emit(sse({ type: 'response.output_text.delta', delta: 'late' }))).toThrow();
-		await host.idle();
-		const reply = (await host.snapshot()).conversations[0].messages[1];
-		expect(reply.status).toBe('unsent');
-		expect(reply.activity).toBeUndefined();
-		const failed = await fixture({
-			request: async (_wire, callback) => {
-				callback(sse({ type: 'response.output_text.delta', delta: 'partial' }));
-				return streamed;
-			},
-		});
-		await send(failed.host);
-		await failed.host.idle();
-		const broken = (await failed.host.snapshot()).conversations[0].messages[1];
-		expect(broken.status).toBe('failed');
-		expect(broken.activity).toBeUndefined();
-		expect(broken.error).toContain('ended before completion');
-	});
+	it.each(['text', 'message-tool'])(
+		'clears %s activity on failure and rejects late output after unsending',
+		async (kind) => {
+			const draft =
+				kind === 'text'
+					? { type: 'response.output_text.delta', delta: 'Draft' }
+					: {
+							type: 'response.output_item.added',
+							output_index: 0,
+							item: {
+								type: 'function_call',
+								id: 'item',
+								call_id: 'call',
+								name: 'bot_send_message',
+								arguments: '',
+							},
+						};
+			let emit!: (chunk: string) => void;
+			const { host } = await fixture({
+				request: async (_wire, callback, signal) => {
+					emit = callback;
+					return new Promise((_resolve, reject) =>
+						signal?.addEventListener('abort', () => reject(signal.reason), { once: true }),
+					);
+				},
+			});
+			await send(host);
+			await vi.waitFor(() => expect(emit).toBeTypeOf('function'));
+			emit(sse(draft));
+			await vi.waitFor(async () =>
+				expect((await host.snapshot()).conversations[0].messages[1].activity).toBe('writing'),
+			);
+			await host.command({ type: 'unsend', conversationId: 'dm', messageId: 'hello' });
+			expect(() => emit(sse({ type: 'response.output_text.delta', delta: 'late' }))).toThrow();
+			await host.idle();
+			const reply = (await host.snapshot()).conversations[0].messages[1];
+			expect(reply.status).toBe('unsent');
+			expect(reply.activity).toBeUndefined();
+			const failed = await fixture({
+				request: async (_wire, callback) => {
+					callback(sse(draft));
+					return streamed;
+				},
+			});
+			await send(failed.host);
+			await failed.host.idle();
+			const broken = (await failed.host.snapshot()).conversations[0].messages[1];
+			expect(broken.status).toBe('failed');
+			expect(broken.activity).toBeUndefined();
+			expect(broken.error).toContain('ended before completion');
+		},
+	);
 	it('falls back only after explicit unsupported streaming and never fabricates a writing phase', async () => {
 		const phases: string[] = [],
 			requests: WireRequest[] = [];
@@ -1525,4 +1572,54 @@ describe('live bot reply activity', () => {
 		expect(requests[1].body?.stream).toBe(false);
 		expect(phases).toEqual(['thinking']);
 	});
+});
+
+it('emits desktop response events only after a new completed mailbox reply, not read/history/reaction refresh', async () => {
+	const received: string[] = [];
+	const { host, config } = await fixture({
+		onResponseCompleted: (_conversation, message) => {
+			received.push(message.id);
+		},
+	});
+	await send(host, 'notify-first');
+	await vi.waitFor(() => expect(received.length).toBe(1));
+	await host.snapshot();
+	await host.command({ type: 'update-conversation', conversationId: 'dm', readAt: Date.now() });
+	expect(received.length).toBe(1);
+	await host.close();
+	const reopened = new BotHost(config);
+	hosts.push(reopened);
+	await reopened.snapshot();
+	expect(received.length).toBe(1);
+	await send(reopened, 'notify-second');
+	await vi.waitFor(() => expect(received.length).toBe(2));
+	expect(new Set(received).size).toBe(2);
+});
+
+describe('Bot provider adapter consumer', () => {
+ it('routes with host-owned bot identity and replays normalized tool results', async () => {
+  const { routeProviderRequest } = await import('../../electron/provider-routing');
+  const state = workspace('chat/completions'), connection = state.connections[0];
+  connection.catalog![0].thinkingModes = [standardThinkingMode()];
+  connection.providerAdapter = { pluginId: 'fixture', accountId: 'fixture-account', providerId: 'custom', credentialHeader: 'authorization' };
+  const canonical: import('../../src/provider-types').ProviderRequest[] = [];
+  const executeTaskTool = vi.fn(async () => ({ status: 'ok', text: 'fixture tool reply' }));
+  const { host } = await fixture({ taskToolDefinitions: () => [taskDefinition('threads_read')], executeTaskTool,
+   request: (wire, chunk, signal) => routeProviderRequest(connection, wire, wire.providerCaller!, {
+    generateWithProvider: async input => {
+     expect(input.caller).toEqual({ surface: 'bot', botId: 'fred', remote: false });
+     expect(wire.connectionId).toBe(connection.id);
+     canonical.push(input.request);
+     if (canonical.length === 1) return { text: '', calls: [{ id: 'call_fixture', name: 'threads_read', arguments: { target: null } }], usage: {}, finishReason: 'tools' };
+     expect(input.request.messages.some(message => message.role === 'tool' && message.callId === 'call_fixture')).toBe(true);
+     input.onEvent({ type: 'text', text: 'Adapter task complete.' });
+     return { text: 'Adapter task complete.', calls: [], usage: {}, finishReason: 'stop' };
+    },
+   }, chunk, signal),
+  }, state);
+  await send(host); await host.idle();
+  expect(executeTaskTool).toHaveBeenCalledOnce();
+  expect(canonical).toHaveLength(2);
+  expect((await host.snapshot()).conversations[0].messages.at(-1)?.content).toBe('Adapter task complete.');
+ });
 });

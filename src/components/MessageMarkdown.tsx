@@ -114,14 +114,18 @@ const MarkdownContent = memo(function MarkdownContent({
 export default memo(function MessageMarkdown({
 	text,
 	sources,
+	defer = true,
 }: {
 	text: string;
 	sources?: ResearchSource[];
+	/** Completed messages must stay consistent with their actions and accessibility labels. */
+	defer?: boolean;
 }) {
-	const deferredText = useDeferredValue(text);
+	const deferredText = useDeferredValue(defer ? text : '');
+	const renderedText = defer ? deferredText : text;
 	return (
 		<div className="message-content">
-			<MarkdownContent text={deferredText.replace(/<\/?proposed_plan>/g, '')} sources={sources} />
+			<MarkdownContent text={renderedText.replace(/<\/?proposed_plan>/g, '')} sources={sources} />
 		</div>
 	);
 });

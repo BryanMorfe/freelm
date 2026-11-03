@@ -1,3 +1,5 @@
+import { runProviderAdapter, type ProviderAdapterBinding } from './provider';
+import type { ProviderRequest, ProviderEvent } from '../../src/provider-types';
 import { createHash, randomUUID } from 'node:crypto';
 import { readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
@@ -508,6 +510,61 @@ export class PluginHost implements PluginToolProvider {
 			op.release();
 		}
 	}
+  /** Host-only experimental entry point. Callers resolve connection credentials, never plugin arguments. */
+  async generateWithProvider(input: {
+    pluginId: string;
+    accountId: string;
+    providerId: string;
+    caller: PluginCaller;
+    baseUrl: string;
+    credential?: ProviderAdapterBinding['credential'];
+    request: ProviderRequest;
+    onEvent: (event: ProviderEvent) => void;
+    signal: AbortSignal;
+  }) {
+    await this.load();
+    await this.writes;
+    const installed = this.plugin(input.pluginId);
+    if (installed.manifest.manifestVersion !== 2 || !installed.package)
+      throw new PluginFailure('Provider package is unavailable.');
+    const declaration = installed.manifest.contributes.providers?.find(
+      (p) => p.id === input.providerId,
+    );
+    if (!declaration) throw new PluginFailure('Provider adapter is not declared.');
+    const hash = installed.package.hash,
+      version = this.versions.get(input.accountId) || 0;
+    const assertAccess = () => {
+      const current = this.plugin(input.pluginId),
+        account = this.assertAccount(input.accountId, input.caller);
+      if (
+        account.pluginId !== input.pluginId ||
+        current.package?.hash !== hash ||
+        (this.versions.get(input.accountId) || 0) !== version ||
+        !current.grantedCapabilities?.includes('provider.use')
+      )
+        throw new PluginFailure('Provider use is not granted or access changed.');
+    };
+    assertAccess();
+    const operation = this.operation(input.accountId, 120000, input.signal);
+    try {
+      return await runProviderAdapter(
+        {
+          code: await this.packages.readBundle(hash),
+          declaration,
+          baseUrl: input.baseUrl,
+          credential: input.credential,
+          allowedOrigins: installed.manifest.permissions.network,
+          assertAccess,
+        },
+        { ...input.request, stream: input.request.stream && declaration.capabilities.streaming },
+        input.onEvent,
+        operation.signal,
+        this.fetcher,
+      );
+    } finally {
+      operation.release();
+    }
+  }
 	private async localTools(plugin: InstalledPlugin): Promise<StoredTool[]> {
 		if (plugin.manifest.manifestVersion !== 2 || !plugin.package)
 			throw new PluginFailure('Local plugin package is unavailable.');

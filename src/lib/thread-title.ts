@@ -20,6 +20,7 @@ export function cleanThreadTitle(value: string): string {
 
 export async function generateThreadTitle(options: {
 	connection: Connection;
+	providerCaller?: 'chat' | 'code';
 	model: string;
 	question: string;
 	answer: string;
@@ -45,6 +46,7 @@ export async function generateThreadTitle(options: {
 		},
 		options.signal,
 		options.thinkingMode,
+		undefined, undefined, options.providerCaller,
 	);
 	return cleanThreadTitle(result);
 }

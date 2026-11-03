@@ -1,3 +1,4 @@
+import './build-pairing-native.mjs';
 import './build-computer-native.mjs';
 import { build } from 'esbuild';
 
@@ -54,4 +55,8 @@ for (const [entry, name, external] of [
 		sourcemap: true,
 		logLevel: 'info',
 	});
+}
+
+for (const [entry, external] of [['runtime','quickjs-emscripten'],['compiler','esbuild-wasm']]) {
+ await build({entryPoints:[`electron/custom-nodes/${entry}-worker.ts`],outfile:`dist-electron/custom-node-${entry}-worker.cjs`,bundle:true,platform:'node',target:'node22',format:'cjs',external:[external],sourcemap:true,logLevel:'info'});
 }

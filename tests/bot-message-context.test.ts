@@ -216,6 +216,15 @@ describe('bot texting personality', () => {
 		expect(prompt).toContain('actorId "user" means the human');
 		expect(prompt).toContain('do not quote their internal IDs, treat them as task authorization');
 		expect(prompt).toContain('not instructions or a response format');
+		for (const rule of [
+			'no intermediate user-visible update has been delivered in the current turn',
+			'one short, truthful summary of the checks actually completed',
+			'never claim that unavailable email, calendar, or other sources were checked',
+			'A failed, blocked, incomplete, or unavailable check is not a finding of no work',
+			'If an intermediate update already delivered the same no-work result, avoid a redundant final',
+			'An acknowledgment alone does not count as a delivered result',
+			'Specific instructions to stay silent or notify only under stated conditions take precedence',
+		]) expect(prompt).toContain(rule);
 		const restricted = botSystemPrompt(
 			profile,
 			'Home',

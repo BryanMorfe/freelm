@@ -1,0 +1,20 @@
+{
+  "status": "expected declarations; NOT regenerated or linked",
+  "baseRevision": "66a8d619a4d791d458d582f312df6e0ab42bc541",
+  "node": [
+    "clearIpTransports(): void",
+    "clearAddressLookup(): void",
+    "disablePortMapping(): void"
+  ],
+  "swift": [
+    "func clearIpTransports()",
+    "func clearAddressLookup()",
+    "func disablePortMapping()"
+  ],
+  "unresolved": [
+    "NetReportConfig definition unavailable locally; cannot validate captive-portal/probe disabling API",
+    "Rust 1.91 minimum unavailable; installed 1.88",
+    "Transitive Rust sources not cached; no offline native build possible"
+  ],
+  "networkAllowed": false
+}

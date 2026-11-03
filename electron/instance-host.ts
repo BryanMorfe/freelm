@@ -1,4 +1,8 @@
+import { MAX_BOT_ATTACHMENT_TOTAL_BYTES } from '../src/lib/bot-attachments';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { MobileAccess } from './mobile-access';
+import { MobileListener, type MobileListenerOptions } from './mobile-listener';
+import { defaultBotResponseSound, validBotResponseSound } from '../src/notification-types';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { Socket } from 'node:net';
 import type { RemoteInfo } from '../src/remote-types';
@@ -113,6 +117,9 @@ export interface InstanceHostOptions {
 
 /** Authenticated loopback service, intended to be reached through an SSH tunnel. */
 export class InstanceHost {
+	private readonly mobileAccess = new MobileAccess();
+	private readonly tlsMobileAccess = new MobileAccess();
+	private readonly mobileListener = new MobileListener();
 	private readonly mediaModeration: MediaModerationGuard;
 	private readonly composer: ComposerContextHost;
 	private readonly codeSurface: CodeSurfaceService;
@@ -138,6 +145,41 @@ export class InstanceHost {
 			throw new Error('Invalid host port.');
 	}
 
+	startMobile(options: MobileListenerOptions): Promise<number> {
+		return this.mobileListener.start(options, (request, response) =>
+			this.handleMobile(request, response, this.tlsMobileAccess, true),
+		);
+	}
+	async stopMobile(): Promise<void> {
+		this.tlsMobileAccess.clear();
+		await this.mobileListener.stop();
+	}
+	mobileStatus() {
+		return {
+			enabled: this.mobileListener.enabled,
+			endpoint: this.mobileListener.endpoint,
+			certificateSHA256: this.mobileListener.certificateSHA256,
+			...this.tlsMobileAccess.status(),
+		};
+	}
+	inviteMobile() {
+		if (!this.mobileListener.enabled || !this.options.bots)
+			throw new Error('Enable the iPhone connection before pairing.');
+		if (this.tlsMobileAccess.status().sessions.length)
+			throw new Error('Revoke the existing iPhone before pairing another.');
+		return {
+			version: 2 as const,
+			endpoint: this.mobileListener.endpoint!,
+			certificateSHA256: this.mobileListener.certificateSHA256!,
+			hostId: this.options.instanceId,
+			hostName: this.options.name,
+			...this.tlsMobileAccess.invite(),
+		};
+	}
+	revokeMobile(id: string) {
+		this.tlsMobileAccess.revoke(id);
+		this.mobileListener.disconnect();
+	}
 	start(): Promise<number> {
 		if (this.starting) return this.starting;
 		if (this.server) return Promise.resolve(this.port);
@@ -182,6 +224,8 @@ export class InstanceHost {
 	}
 
 	async stop(): Promise<void> {
+		await this.stopMobile();
+		this.mobileAccess.clear();
 		for (const id of this.toolRuns) this.options.agent?.cancel(id);
 		this.toolRuns.clear();
 		await Promise.all(
@@ -200,13 +244,17 @@ export class InstanceHost {
 		});
 	}
 
-	private authenticate(request: IncomingMessage) {
+	private validateOrigin(request: IncomingMessage) {
 		if (request.headers.origin !== undefined)
 			throw new HttpError(403, 'Browser-origin requests are not allowed.');
 		const host = /^(?:127\.0\.0\.1|localhost)(?::([0-9]{1,5}))?$/.exec(request.headers.host ?? '');
 		// SSH forwards to a different client-side port, which fetch uses in Host.
 		if (!host || (host[1] !== undefined && (Number(host[1]) < 1 || Number(host[1]) > 65535)))
 			throw new HttpError(403, 'Invalid host header.');
+	}
+
+	private authenticate(request: IncomingMessage) {
+		this.validateOrigin(request);
 		const actual = Buffer.from(request.headers.authorization ?? '');
 		const expected = Buffer.from(`Bearer ${this.options.token}`);
 		if (actual.length !== expected.length || !timingSafeEqual(actual, expected))
@@ -222,7 +270,154 @@ export class InstanceHost {
 		return connection;
 	}
 
+	/** Narrow projection: never expose workspace credentials, project/task APIs or bot configuration. */
+	private async mobileSnapshot() {
+		if (!this.options.bots) throw new HttpError(404, 'Bots are unavailable on this host.');
+		const snapshot = await this.options.bots.snapshot();
+		return {
+			host: snapshot.host,
+			revision: snapshot.revision,
+			bots: snapshot.bots.map(({ id, name, color }) => ({ id, name, color })),
+			conversations: snapshot.conversations.map(
+				({ id, title, participants, messages, updatedAt }) => ({
+					id,
+					title,
+					participants,
+					messages,
+					updatedAt,
+				}),
+			),
+		};
+	}
+
+	private async handleMobile(
+		request: IncomingMessage,
+		response: ServerResponse,
+		access = this.mobileAccess,
+		tls = false,
+	) {
+		if (!tls) this.validateOrigin(request);
+		const route = `${request.method} ${request.url}`;
+		if (route === 'POST /mobile/invitations') {
+			if (tls) throw new HttpError(403, 'Owner operations require local access.');
+			this.authenticate(request); // Only an existing owner credential can invite or revoke.
+			if (!this.options.bots) throw new HttpError(404, 'Bots are unavailable.');
+			sendJson(response, 200, {
+				version: 1,
+				hostId: this.options.instanceId,
+				hostName: this.options.name,
+				...access.invite(),
+			});
+			return;
+		}
+		if (route === 'POST /mobile/revoke') {
+			if (tls) throw new HttpError(403, 'Owner operations require local access.');
+			this.authenticate(request);
+			const body = await readJson(request, 4096);
+			if (!record(body) || typeof body.id !== 'string')
+				throw new HttpError(400, 'Choose a session or invitation.');
+			access.revoke(body.id);
+			sendJson(response, 200, { revoked: true });
+			return;
+		}
+		if (route === 'POST /mobile/pair') {
+			const body = await readJson(request, 4096);
+			if (
+				!record(body) ||
+				body.hostId !== this.options.instanceId ||
+				typeof body.id !== 'string' ||
+				typeof body.secret !== 'string' ||
+				body.secret.length > 128
+			)
+				throw new HttpError(400, 'Invalid invitation identity.');
+			try {
+				const grant = access.exchange(body.id, body.secret);
+				sendJson(response, 200, {
+					...grant,
+					hostId: this.options.instanceId,
+					capabilities: ['bots.read', 'bots.send', 'preferences.sound'],
+					replication: false,
+				});
+			} catch {
+				throw new HttpError(401, 'Invitation expired, already used, or unavailable.');
+			}
+			return;
+		}
+		const session = access.authorize((request.headers.authorization ?? '').replace(/^Bearer /, ''));
+		if (!session)
+			throw new HttpError(401, 'Pair again. This mobile session has expired or was revoked.');
+		const requireSession = () => {
+			if (!access.authorize((request.headers.authorization ?? '').replace(/^Bearer /, '')))
+				throw new HttpError(401, 'This mobile session was revoked or expired.');
+		};
+        return this.handleAuthorizedMobile(request, response, requireSession, () => access.revoke(session.id));
+    }
+
+    /** Called only inside LocalEnrollment.withAuthorization by the dedicated listener. */
+    async handleAuthorizedMobile(request: IncomingMessage, response: ServerResponse,
+        requireSession: () => void, disconnect: () => void) {
+        const route = `${request.method} ${request.url}`;
+        requireSession();
+		if (route === 'POST /mobile/disconnect') {
+			disconnect();
+			sendJson(response, 200, { revoked: true });
+		} else if (route === 'GET /mobile/snapshot') {
+			sendJson(response, 200, await this.mobileSnapshot());
+		} else if (route === 'POST /mobile/send') {
+			// Base64 expansion plus bounded message text and JSON metadata.
+			const body = await readJson(request, Math.ceil(MAX_BOT_ATTACHMENT_TOTAL_BYTES / 3) * 4 + 256 * 1024);
+			requireSession();
+			if (
+				!record(body) ||
+				body.hostId !== this.options.instanceId ||
+				Object.keys(body).some(
+					(k) => !['hostId', 'conversationId', 'messageId', 'content', 'attachments'].includes(k),
+				)
+			)
+				throw new HttpError(400, 'Send only to the conversation owning host.');
+			const command = {
+				type: 'send',
+				conversationId: body.conversationId,
+				messageId: body.messageId,
+				content: body.content,
+				...(body.attachments === undefined ? {} : { attachments: body.attachments }),
+			};
+			validateBotCommand(command);
+			if (!this.options.bots) throw new HttpError(404, 'Bots are unavailable.');
+			await this.options.bots.command(command, true, requireSession);
+			sendJson(response, 200, await this.mobileSnapshot());
+		} else if (route === 'GET /mobile/preferences') {
+			const { state, revision } = await this.options.authority.load();
+			sendJson(response, 200, {
+				revision,
+				sound: state?.botResponseSound ?? defaultBotResponseSound,
+			});
+		} else if (route === 'POST /mobile/preferences') {
+			const body = await readJson(request, 4096);
+			requireSession();
+			if (
+				!record(body) ||
+				typeof body.revision !== 'string' ||
+				!validBotResponseSound(body.sound) ||
+				Object.keys(body).some((k) => !['revision', 'sound'].includes(k))
+			)
+				throw new HttpError(400, 'Invalid sound preferences.');
+			const { revision, sound } = body;
+			await this.options.authority.mutate((state) => {
+				requireSession();
+				if (revision !== this.options.authority.currentRevision())
+					throw new WorkspaceConflictError();
+				return { state: { ...state, botResponseSound: sound }, value: undefined };
+			});
+			sendJson(response, 200, { saved: true });
+		} else throw new HttpError(403, 'This operation is outside mobile capabilities.');
+	}
+
 	private async handle(request: IncomingMessage, response: ServerResponse) {
+		if (request.url?.startsWith('/mobile/')) {
+			await this.handleMobile(request, response);
+			return;
+		}
 		this.authenticate(request);
 		const route = `${request.method} ${request.url}`;
 		if (route === 'GET /info') {
@@ -619,6 +814,7 @@ export class InstanceHost {
 		if (!record(input) || ['baseUrl', 'apiKey', 'workspaceId'].some((key) => key in input))
 			throw new HttpError(400, 'Remote requests must use a host connection identifier.');
 		const connection = await this.connection(input.connectionId);
+		if (connection.providerAdapter || input.providerAdapterRequired) throw new HttpError(400, 'Provider adapters are not supported for remote workspaces yet.');
 		const wire = { ...input, baseUrl: connection.baseUrl, apiKey: connection.apiKey };
 		validateRequest(wire);
 		if (!supportedRequest(wire))

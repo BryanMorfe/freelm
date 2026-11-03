@@ -350,7 +350,9 @@ test('custom model ID is an explicit advanced action and unconfigured models req
 	await expect(page.getByRole('button', { name: 'Send message' })).toBeDisabled();
 	await trigger.click();
 	await expect(
-		modelDialog(page).getByText('Configure a thinking value for this model.'),
+		modelDialog(page).getByText(
+			'Choose Standard mode or configure a thinking value for this model.',
+		),
 	).toBeVisible();
 	await expect(modelDialog(page).getByRole('slider')).toHaveCount(0);
 	await modelDialog(page).getByRole('button', { name: 'Configure thinking values' }).click();

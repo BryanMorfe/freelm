@@ -480,6 +480,7 @@ describe('host-owned Bot task execution', () => {
 	});
 	it('renderer loss persists interruption and does not falsely report completion or affect remote ownership', async () => {
 		const f = await fixture();
+		const execute = vi.spyOn(f.agent, 'execute');
 		await f.authority.mutate((state) => ({
 			state: {
 				...state,
@@ -499,6 +500,7 @@ describe('host-owned Bot task execution', () => {
 							content: 'Partial',
 							phase: 'working',
 							createdAt: 1,
+							toolCalls: [{ id: 'in-flight', name: 'exec_command', arguments: '{}', status: 'running', startedAt: 1 }],
 						},
 					],
 				})),
@@ -510,7 +512,12 @@ describe('host-owned Bot task execution', () => {
 		await f.service.rendererClosed();
 		const state = (await f.store.load())!;
 		expect(state.threads[0].messages.at(-1)?.interrupted).toBe(true);
+		expect(state.threads[0].messages.at(-1)?.toolCalls?.[0].status).toBe('failed');
 		expect(state.threads[1].messages.at(-1)?.interrupted).toBeUndefined();
+		expect(state.threads[1].messages.at(-1)?.toolCalls?.[0].status).toBe('running');
+		await f.service.rendererClosed();
+		expect(execute).not.toHaveBeenCalled();
+		expect(f.requests).toEqual([]);
 		expect(await f.service.statuses(['visible', 'remote'])).toEqual({
 			visible: 'error',
 			remote: 'working',

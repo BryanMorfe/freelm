@@ -19,6 +19,7 @@ const workspaceModes: readonly WorkspaceMode[] = [
 	'images',
 	'videos',
 	'audio',
+	'plugins',
 ];
 
 function defaults(): NavigationPreferences {

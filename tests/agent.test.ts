@@ -1,3 +1,4 @@
+import { standardThinkingMode } from '../src/lib/catalog';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { streamAgentChat, toolApiName, type AgentChatOptions } from '../src/lib/agent';
 import type { AgentUpdate, ToolDefinition, ToolResult } from '../src/agent-types';
@@ -5,6 +6,7 @@ import type { Connection, DesktopBridge, Message, WireRequest, WireResponse } fr
 import * as imageContext from '../src/lib/generated-image-context';
 import { COMPACTION_PROMPT, SUMMARY_PREFIX } from '../src/lib/context-compaction';
 import { formatPromptContext } from '../src/lib/prompt-context';
+import { ChatSteeringInbox } from '../src/lib/chat-steering';
 
 const connection: Connection = {
 	id: 'local',
@@ -128,7 +130,94 @@ afterEach(() => {
 	vi.restoreAllMocks();
 });
 
+describe('immediate Chat steering', () => {
+	it.each(['responses', 'chat/completions'] as const)('interrupts %s inference without executing speculative calls', async api => {
+		const inbox = new ChatSteeringInbox();
+		const execute = vi.fn(async () => ok);
+		const request: NonNullable<AgentChatOptions['request']> = async (_request, _chunk, signal) => {
+			queueMicrotask(() => inbox.push({ id: 'steer', role: 'user', content: 'Change direction', createdAt: 2 }));
+			await new Promise<void>((_resolve, reject) => signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }));
+			throw Error('unreachable');
+		};
+		const result = await streamAgentChat(options({ connection: { ...connection, chatApi: api }, request,
+			execute, inputSignal: inbox.signal, shouldYieldForInput: () => inbox.pending }));
+		expect(result.yieldedForInput).toBe(true);
+		expect(execute).not.toHaveBeenCalled();
+		expect(result.transcript.items).toEqual([]);
+		expect(inbox.take().map(item => item.id)).toEqual(['steer']);
+		expect(inbox.signal.aborted).toBe(false);
+	});
+	it.each(['responses', 'chat/completions'] as const)('interrupts %s context compaction without installing a partial checkpoint', async api => {
+		const inbox = new ChatSteeringInbox();
+		const request: NonNullable<AgentChatOptions['request']> = vi.fn(async (_connection, request, signal) => {
+			expect(JSON.stringify(request.body)).toContain(JSON.stringify(COMPACTION_PROMPT).slice(1, -1));
+			queueMicrotask(() => inbox.push({ id: 'steer-summary', role: 'user', content: 'Use the new instructions', createdAt: 4 }));
+			await new Promise<void>((_resolve, reject) => signal!.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')), { once: true }));
+			throw Error('unreachable');
+		});
+		const longHistory: Message[] = [...history, { id: 'long', role: 'assistant', content: 'x'.repeat(20000), createdAt: 2 }, { id: 'continue', role: 'user', content: 'Continue', createdAt: 3 }];
+		const result = await streamAgentChat(options({
+			connection: { ...connection, chatApi: api, catalog: connection.catalog!.map(entry => ({ ...entry, contextWindow: 4096 })) },
+			history: longHistory, compaction: true, compactionSettings: { thresholdPercent: 90, reserveTokens: 1024 },
+			request, inputSignal: inbox.signal, shouldYieldForInput: () => inbox.pending,
+		}));
+		expect(result.yieldedForInput).toBe(true);
+		expect(result.transcript.context).toBeUndefined();
+		expect(result.transcript.items).toEqual([]);
+		expect(longHistory[1].content).toHaveLength(20000);
+		expect(request).toHaveBeenCalledTimes(1);
+	});
+	it('settles a running tool once and skips the remaining old-plan calls', async () => {
+		const inbox = new ChatSteeringInbox();
+		const execute = vi.fn(async () => {
+			inbox.push({ id: 'new', role: 'user', content: 'Stop that plan', createdAt: 2 });
+			return ok;
+		});
+		const request = vi.fn(async () => json({ output: [call('first'), call('second')] }));
+		const result = await streamAgentChat(options({ request, execute, inputSignal: inbox.signal,
+			shouldYieldForInput: () => inbox.pending }));
+		expect(execute).toHaveBeenCalledTimes(1);
+		expect(request).toHaveBeenCalledTimes(1);
+		expect(result.yieldedForInput).toBe(true);
+		expect(result.toolCalls[0].result).toEqual(ok);
+		expect(JSON.stringify(result.toolCalls[1].result)).toContain('Not executed: new user instructions');
+		expect(result.transcript.items.filter(item => item.type === 'function_call_output')).toHaveLength(2);
+	});
+	it('gives explicit cancellation precedence over steering', async () => {
+		const inbox = new ChatSteeringInbox(), stop = new AbortController();
+		inbox.push({ id: 'new', role: 'user', content: 'Change direction', createdAt: 2 });
+		stop.abort();
+		await expect(streamAgentChat(options({ signal: stop.signal, inputSignal: inbox.signal,
+			shouldYieldForInput: () => inbox.pending }))).rejects.toMatchObject({ name: 'AbortError' });
+	});
+});
+
 describe('queued input at complete protocol boundaries', () => {
+	it.each(['responses', 'chat/completions', 'chat'] as const)(
+		'keeps agent tools and instructions in Standard mode on %s',
+		async (chatApi) => {
+			const configured = structuredClone(connection);
+			configured.chatApi = chatApi;
+			configured.catalog![0].thinkingModes = [standardThinkingMode()];
+			const { desktop } = bridge(() =>
+				json(
+					chatApi === 'responses'
+						? { output: [message('Standard answer')] }
+						: { choices: [{ message: { content: 'Standard answer' }, finish_reason: 'stop' }] },
+				),
+			);
+			expect(
+				(await streamAgentChat(options({ connection: configured, thinkingMode: 'standard' })))
+					.content,
+			).toBe('Standard answer');
+			const body = desktop.request.mock.calls[0][0].body!;
+			for (const key of ['reasoning', 'reasoning_effort', 'useProviderDefaults'])
+				expect(body).not.toHaveProperty(key);
+			expect(body.tools).toHaveLength(1);
+			expect(JSON.stringify(body)).toContain('Be careful');
+		},
+	);
+
 	const apis = ['responses', 'chat/completions'] as const;
 	const round = (api: Connection['chatApi'], calls: ReturnType<typeof call>[], text = '') =>
 		json(
@@ -1509,6 +1598,20 @@ describe('agent Responses protocol', () => {
 		expect(result.content).toBe(`${long}\n\nFinished`);
 		expect(execute).toHaveBeenCalledExactlyOnceWith('exec_command', { cmd: 'pwd' }, 'big');
 	});
+
+	it.each(['max_output_tokens', 'content_filter'])(
+		'keeps the incomplete JSON Responses reason %s and never executes its tool calls',
+		async (reason) => {
+			bridge(() =>
+				json({ status: 'incomplete', incomplete_details: { reason }, output: [call('unsafe')] }),
+			);
+			const execute = vi.fn<AgentChatOptions['execute']>(async () => ok);
+			await expect(streamAgentChat(options({ execute }))).rejects.toThrow(
+				`The response was incomplete: ${reason}.`,
+			);
+			expect(execute).not.toHaveBeenCalled();
+		},
+	);
 
 	it.each(['missing completion', 'malformed JSON', 'incomplete', 'delivery mismatch'] as const)(
 		'does not execute calls on %s and exposes stream diagnostics',

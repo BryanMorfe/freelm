@@ -1,3 +1,4 @@
+import { runProviderWorker } from './provider-worker';
 import { parentPort, workerData } from 'node:worker_threads';
 import {
 	getQuickJS,
@@ -8,7 +9,7 @@ import {
 interface Input {
 	code: string;
 	config: {
-		kind: 'tool' | 'action';
+		kind: 'tool' | 'action' | 'provider';
 		name: string;
 		args: Record<string, unknown>;
 		account: { id: string; label: string };
@@ -113,9 +114,9 @@ async function main() {
   for (const name of ['console','Atomics','SharedArrayBuffer','WebAssembly']) delete globalThis[name];
   globalThis.__invoke = config => {
    const ctx = Object.freeze({account:Object.freeze(config.account),operationId:config.operationId, storage:Object.freeze({get:key=>host('storage.get',{key}),set:(key,value)=>host('storage.set',{key,value}),remove:key=>host('storage.remove',{key})}),fetch:(url,init={})=>host('fetch',{url,init})});
-   Promise.resolve().then(() => { const plugin = globalThis.__freelmPlugin && globalThis.__freelmPlugin.default; const collection = plugin && plugin[config.kind === 'tool' ? 'tools' : 'actions'];
+   Promise.resolve().then(() => { const plugin = globalThis.__freelmPlugin && globalThis.__freelmPlugin.default; const collection = plugin && plugin[config.kind === 'provider' ? 'providers' : config.kind === 'tool' ? 'tools' : 'actions'];
     if (!collection || !Object.prototype.hasOwnProperty.call(collection,config.name) || typeof collection[config.name] !== 'function') throw new Error('Plugin does not implement the declared handler.');
-    return collection[config.name](config.args,ctx);
+    return collection[config.name](config.args,config.kind === 'provider' ? Object.freeze({}) : ctx);
    }).then(value=>bridge('done',encode(value))).catch(error=>bridge('error',String(error && error.message || error)));
   };
  })();`;
@@ -182,6 +183,6 @@ async function main() {
 	});
 	schedule();
 }
-void main().catch((error) =>
+void ((workerData as { providerSession?: boolean }).providerSession ? runProviderWorker(workerData, port) : main()).catch((error) =>
 	finish(error instanceof Error ? error.message : 'Plugin interpreter failed.'),
 );

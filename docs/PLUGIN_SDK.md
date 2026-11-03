@@ -279,3 +279,13 @@ ZIP imports reject unsafe paths, symlinks, duplicate entries, unsupported archiv
 The example exercises install-time compilation, a custom tab, account storage shared between UI and model tools, updates, and disabling/removal. Automated checks use disposable profiles, synthetic accounts, and fixture services; they do not connect real mail accounts.
 
 Technical references: [esbuild's build API](https://esbuild.github.io/api/), [Electron security guidance](https://www.electronjs.org/docs/latest/tutorial/security). These explain the bundling and renderer isolation primitives; FreeLM's declared capability and credential checks are application-level controls.
+
+## Provider adapters (API v2)
+
+A package can contribute `providers` and request `provider.use` to translate custom
+endpoint protocols for local Chat, Code, Bots and plugin inference. Provider handlers
+are pure synchronous transforms with no tool/action context or network methods.
+The host owns credentials, transport and caller grants. One sandbox realm lasts for
+one inference request, including its streaming frames; it is not shared across runs.
+See [Provider adapters](PROVIDER_ADAPTERS.md) for the versioned contract, configuration,
+text/tool limits, fail-closed behavior and [example package](../examples/plugins/provider-adapters/manifest.json).

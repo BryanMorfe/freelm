@@ -81,6 +81,12 @@ export class WorkspaceAuthority {
 		}));
 	}
 	/** Search lifecycle reads only its host-owned configuration, never API credentials or media. */
+	loadNotificationPreferences() {
+		return this.serialize(async () => ({
+			backgroundNotifications: this.state?.backgroundNotifications,
+			botResponseSound: this.state?.botResponseSound,
+		}));
+	}
 	loadSearchSettings(): Promise<ToolSettings['webBrowsing']> {
 		return this.serialize(async () => structuredClone(this.state?.toolSettings?.webBrowsing));
 	}

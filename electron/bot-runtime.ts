@@ -190,7 +190,7 @@ export const botRuntimeTools = [
 			'Send a concise text message immediately without ending your turn. For a new human work request, use this first to acknowledge your intended next step before investigation or other work tools, then continue working. Also use for meaningful progress or blockers. Do not claim success before results, expose private reasoning, or repeat a delivered message. Simple replies and quiet notifications need no preliminary acknowledgment.',
 		parameters: {
 			type: 'object',
-			properties: { text: { type: 'string', minLength: 1, maxLength: 32000 } },
+			properties: { text: { type: 'string', maxLength: 32000 }, attachmentRefs: { type: 'array', maxItems: 6, items: { type: 'string' }, description: 'Optional bot-attachment references from this conversation or thread-asset references from authorized task reads on this computer with current thread access. Delivers stored files including generated media without opening them. Never paths or URLs.' } },
 			required: ['text'],
 			additionalProperties: false,
 		},

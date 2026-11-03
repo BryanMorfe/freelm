@@ -23,6 +23,7 @@ __pycache__/
 /resources/search/source.staging-*/
 /resources/computer/freelm-computer
 /resources/computer/.build-stamp
+/resources/pairing/freelm-pairing-vault
 
 # Local profiles, credentials, and machine-specific configuration
 .freelm/
@@ -37,3 +38,11 @@ __pycache__/
 *.mobileprovision
 .DS_Store
 *.local
+
+# Native build caches and local validation captures
+.build/
+.build-*/
+DerivedData/
+xcuserdata/
+*.xcuserstate
+evidence/

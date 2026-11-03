@@ -18,6 +18,7 @@ interface Draft {
 	name: string;
 	effort: string;
 	custom: boolean;
+	useProviderDefaults?: boolean;
 	responses: string;
 	chat: string;
 }
@@ -35,12 +36,19 @@ function simpleEffort(mode: ThinkingMode): string | undefined {
 	)
 		return effort;
 }
-function parameters(value: string, endpoint: string): Record<string, JsonValue> | undefined {
+function parameters(
+	value: string,
+	endpoint: string,
+	useProviderDefaults = false,
+): Record<string, JsonValue> | undefined {
 	if (!value.trim()) return;
 	try {
 		const parsed: unknown = JSON.parse(value);
 		if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error();
-		if (!hasThinkingValue(parsed as Record<string, JsonValue>))
+		if (
+			!hasThinkingValue(parsed as Record<string, JsonValue>) &&
+			!(useProviderDefaults && Object.keys(parsed).length === 0)
+		)
 			throw new Error(`${endpoint} parameters must specify a thinking value.`);
 		return parsed as Record<string, JsonValue>;
 	} catch (error) {
@@ -71,6 +79,7 @@ export default function ThinkingPresetsEditor({
 			name: mode?.name || '',
 			effort: effort || '',
 			custom: !!mode && effort === undefined,
+			useProviderDefaults: mode?.useProviderDefaults,
 			responses: mode?.parameters.responses
 				? JSON.stringify(mode.parameters.responses, null, 2)
 				: '',
@@ -96,12 +105,15 @@ export default function ThinkingPresetsEditor({
 			if (!draft.custom && !draft.effort.trim())
 				throw new Error('Enter the API effort value, or use custom JSON parameters.');
 			const responseParameters = draft.custom
-				? parameters(draft.responses, 'Responses')
+				? parameters(draft.responses, 'Responses', draft.useProviderDefaults)
 				: undefined;
-			const chatParameters = draft.custom ? parameters(draft.chat, 'Chat') : undefined;
+			const chatParameters = draft.custom
+				? parameters(draft.chat, 'Chat', draft.useProviderDefaults)
+				: undefined;
 			const mode: ThinkingMode = {
 				id: draft.id.trim() || draft.effort.trim() || crypto.randomUUID(),
 				name: draft.name.trim(),
+				...(draft.custom && draft.useProviderDefaults ? { useProviderDefaults: true } : {}),
 				parameters: draft.custom
 					? {
 							...(responseParameters ? { responses: responseParameters } : {}),

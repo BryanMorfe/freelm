@@ -174,7 +174,12 @@ export function createBotProviderStream(
 	};
 	const tool = () => {
 		toolRound = true;
-		onActivity('thinking');
+		onActivity(
+			[...items.values()].some((item) => item.name === 'bot_send_message') ||
+			[...calls.values()].some((call) => call.function.name === 'bot_send_message')
+				? 'writing'
+				: 'thinking',
+		);
 	};
 	const indexFor = (data: Record<string, unknown>) => {
 		if (
@@ -272,7 +277,7 @@ export function createBotProviderStream(
 					if (typeof delta[key] === 'string') extra[key] = str(extra[key]) + delta[key];
 					else if (Array.isArray(delta[key])) extra[key] = [...list(extra[key]), ...delta[key]];
 				}
-				if (list(delta.tool_calls).length) tool();
+				if (list(delta.tool_calls).length) toolRound = true;
 				if (replyChannel(chatChannel))
 					output(contentText(delta.content) || contentText(delta.refusal));
 				else onActivity('thinking');
@@ -299,6 +304,7 @@ export function createBotProviderStream(
 						throw new Error('The streamed tool arguments exceed the 256 KB limit.');
 					calls.set(index, call);
 				}
+				if (list(delta.tool_calls).length) tool();
 				if (choice.finish_reason) {
 					finishReason = str(choice.finish_reason);
 					if (!['stop', 'tool_calls'].includes(finishReason))

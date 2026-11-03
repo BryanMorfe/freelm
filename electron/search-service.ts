@@ -4,6 +4,7 @@ import { access, mkdir, open, realpath, rename, rm, stat, writeFile } from 'node
 import { constants } from 'node:fs';
 import { createServer } from 'node:net';
 import path from 'node:path';
+import { CrashBudget } from './recovery';
 import type { SearchServiceStatus, WebServiceInfo } from '../src/agent-types';
 
 export interface SearchServiceOptions {
@@ -17,6 +18,9 @@ export interface SearchServiceOptions {
 	stopTimeoutMs?: number;
 	/** Test fixture may deliberately create a port conflict. Production always uses an ephemeral port. */
 	allocatePort?: () => Promise<number>;
+	/** Restarts only the helper, never an interrupted query. */
+	recoveryDelaysMs?: number[];
+	onRecovery?: (event: string, details: { reason: string; exitCode?: number }) => void;
 }
 
 const LOG_LIMIT = 128 * 1024;
@@ -152,8 +156,11 @@ export class SearchServiceManager {
 	private logTimer?: ReturnType<typeof setTimeout>;
 	private logWrite: Promise<void> = Promise.resolve();
 	private canWriteLog = false;
+	private readonly crashBudget: CrashBudget;
+	private recoveryTimer?: ReturnType<typeof setTimeout>;
 
 	constructor(private readonly options: SearchServiceOptions) {
+		this.crashBudget = new CrashBudget(options.recoveryDelaysMs ?? [1000, 4000]);
 		if (
 			![options.searchHome, options.bundleRoot, options.executablePath, options.launcherPath].every(
 				path.isAbsolute,
@@ -259,6 +266,8 @@ export class SearchServiceManager {
 	}
 
 	async start(engines: string[] = []): Promise<SearchServiceStatus> {
+		clearTimeout(this.recoveryTimer);
+		this.recoveryTimer = undefined;
 		const stopVersion = this.stopVersion;
 		await this.ready;
 		if (this.closed) throw new Error('FreeLM is shutting down.');
@@ -365,6 +374,7 @@ export class SearchServiceManager {
 							message: message(exitError),
 						});
 						this.child = undefined;
+						this.scheduleRecovery(code ?? undefined);
 					}
 					resolve();
 				});
@@ -460,6 +470,8 @@ export class SearchServiceManager {
 
 	async stop(): Promise<SearchServiceStatus> {
 		this.stopVersion++;
+		clearTimeout(this.recoveryTimer);
+		this.recoveryTimer = undefined;
 		if (this.stopPromise) return this.stopPromise;
 		if (this.state.phase === 'unavailable' && !this.startPromise && !this.child)
 			return this.status();
@@ -509,6 +521,27 @@ export class SearchServiceManager {
 		}
 		if (this.child === child) this.child = undefined;
 		this.childEnded = undefined;
+	}
+
+	private scheduleRecovery(exitCode?: number) {
+		if (this.closed || this.recoveryTimer) return;
+		const delay = this.crashBudget.next();
+		const details = { reason: 'unexpected-exit', exitCode };
+		try {
+			this.options.onRecovery?.(delay === undefined ? 'crash-loop' : 'restart-scheduled', details);
+		} catch { /* A diagnostic observer cannot break the helper lifecycle. */ }
+		if (delay === undefined) {
+			this.setState({ ...this.state, message: 'Built-in search stopped repeatedly. Automatic recovery is paused. Start it again in Settings → Search when you are ready.' });
+			return;
+		}
+		this.setState({ ...this.state, message: 'Built-in search stopped. Restarting its helper; interrupted searches will not be retried.' });
+		const version = this.stopVersion;
+		const engines = [...this.state.selectedEngineNames];
+		this.recoveryTimer = setTimeout(() => {
+			this.recoveryTimer = undefined;
+			if (this.closed || version !== this.stopVersion) return;
+			void this.start(engines).catch(() => { /* start exposes its error through status */ });
+		}, delay);
 	}
 
 	private appendLog(value: string) {
