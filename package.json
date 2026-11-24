@@ -104,7 +104,9 @@
 		},
 		"files": [
 			"dist/**/*",
+			"!dist/**/*.map",
 			"dist-electron/**/*",
+			"!dist-electron/**/*.map",
 			"resources/branding/icon.png",
 			"package.json",
 			"THIRD_PARTY_NOTICES.md"

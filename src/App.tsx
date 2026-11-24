@@ -14,7 +14,7 @@ import { composerVisibleText } from './lib/composer-mention-codec';
 import type { ComposerContext } from './composer-types';
 import { composerGoal, latestComposerMode } from './lib/composer-context';
 import { codePlanToolDenial } from './lib/code-plan';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Folder, LoaderCircle, MessageCircle, Search, X, Server, RefreshCw } from 'lucide-react';
 import type {
 	AppState,
@@ -32,7 +32,7 @@ import type {
 } from './types';
 import { initialState, conversationInput, recoverState, downloadText } from './lib/state';
 import { loadNavigationPreferences, saveNavigationPreferences } from './lib/navigation-preferences';
-import { resolveAppearance } from './lib/appearance';
+import { appearanceSurfaceBorders, resolveAppearance } from './lib/appearance';
 import WorkspaceSplash from './components/WorkspaceSplash';
 import {
 	acceptWorkspaceSnapshot,
@@ -160,8 +160,7 @@ import {
 	resolveThinkingMode,
 } from './lib/catalog';
 import Sidebar from './components/Sidebar';
-import PluginWorkspace from './components/PluginWorkspace';
-import PluginSettings from './components/PluginSettings';
+import ErrorBoundary from './components/ErrorBoundary';
 import { usePluginTabs } from './components/usePluginTabs';
 import { usePluginSurfaceHost } from './components/usePluginSurfaceHost';
 import WorkspaceTitlebar from './components/WorkspaceTitlebar';
@@ -169,13 +168,23 @@ import ConversationSources from './components/ConversationSources';
 import { collectConversationSources } from './lib/conversation-sources';
 import { collectTaskOutputs } from './lib/task-outputs';
 import Chat from './components/Chat';
-import Settings, { type SettingsSection } from './components/Settings';
-import { MediaPlayground } from './components/MediaPlayground';
-import { ImagePlayground } from './components/ImagePlayground';
-import { VideoPlayground } from './components/VideoPlayground';
+import type { SettingsSection } from './components/Settings';
 import { useBotsWorkspace } from './components/BotsFeature';
 import './components/instances.css';
 import './components/workspace.css';
+
+const Settings = lazy(() => import('./components/Settings'));
+const PluginWorkspace = lazy(() => import('./components/PluginWorkspace'));
+const PluginSettings = lazy(() => import('./components/PluginSettings'));
+const MediaPlayground = lazy(() =>
+	import('./components/MediaPlayground').then((m) => ({ default: m.MediaPlayground })),
+);
+const ImagePlayground = lazy(() =>
+	import('./components/ImagePlayground').then((m) => ({ default: m.ImagePlayground })),
+);
+const VideoPlayground = lazy(() =>
+	import('./components/VideoPlayground').then((m) => ({ default: m.VideoPlayground })),
+);
 
 type Dialog =
 	| { kind: 'project'; project?: Project; conversationKind: ConversationKind }
@@ -781,11 +790,17 @@ export default function App() {
 			active = false;
 		};
 	}, []);
+	const lastAutosaveAt = useRef(0);
 	useEffect(() => {
 		if (!loaded || switching) return;
+		const streaming = runningThreads.size > 0;
+		const delay = streaming
+			? Math.max(250, Math.min(1000, 5000 - (Date.now() - lastAutosaveAt.current)))
+			: 350;
 		const timer = setTimeout(
 			() => {
 				if (transitioning.current) return;
+				lastAutosaveAt.current = Date.now();
 				saveQueue.current = saveQueue.current
 					.catch(() => {})
 					.then(() =>
@@ -798,7 +813,7 @@ export default function App() {
 						),
 					);
 			},
-			runningThreads.size ? 1000 : 350,
+			delay,
 		);
 		return () => clearTimeout(timer);
 	}, [state, loaded, workspaceId, switching, runningThreads]);
@@ -809,10 +824,13 @@ export default function App() {
 			const root = document.documentElement;
 			root.dataset.theme = theme;
 			const colors = resolveAppearance(state.appearance, theme);
+			const borders = appearanceSurfaceBorders(colors, theme);
 			root.style.setProperty('--user-bubble', colors.bubble);
 			root.style.setProperty('--on-user-bubble', colors.bubbleText);
+			root.style.setProperty('--user-bubble-border', borders.bubbleBorder);
 			root.style.setProperty('--primary', colors.primary);
 			root.style.setProperty('--on-primary', colors.onPrimary);
+			root.style.setProperty('--primary-border', borders.primaryBorder);
 		};
 		apply();
 		media.addEventListener('change', apply);
@@ -932,13 +950,15 @@ export default function App() {
 			removeSound?.();
 		};
 	}, [loaded]);
-	useEffect(() =>
-		window.desktop?.onOpenThread?.((id) => {
-			if (stateRef.current.threads.some((item) => item.id === id)) {
-				setSettings(false);
-				selectThread(id);
-			}
-		}),
+	const openThreadAction = useRef<(id: string) => void>(() => {});
+	openThreadAction.current = (id: string) => {
+		if (stateRef.current.threads.some((item) => item.id === id)) {
+			leaveSettings(() => selectThread(id));
+		}
+	};
+	useEffect(
+		() => window.desktop?.onOpenThread?.((id) => openThreadAction.current(id)),
+		[],
 	);
 	useEffect(() => {
 		if (!loaded) return;
@@ -955,43 +975,65 @@ export default function App() {
 			unsubscribe?.();
 		};
 	}, [loaded]);
-	useEffect(() => {
-		function keys(e: KeyboardEvent) {
-			if (settings || projectSavingRef.current) return;
-			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-				e.preventDefault();
-				setQuery('');
-				setDialog({ kind: 'search' });
-			}
-			if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
-				e.preventDefault();
-				newChat(activeConversationKind, null, e.shiftKey);
-			}
-			if (e.key === 'Escape') {
-				setDialog(null);
-				setReloadConfirm(false);
-			}
+	const keyHandlerRef = useRef<(e: KeyboardEvent) => void>(() => {});
+	keyHandlerRef.current = (e: KeyboardEvent) => {
+		if (e.defaultPrevented || settings || welcomeOpen || projectSavingRef.current) return;
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+			if (dialog || reloadConfirm) return;
+			e.preventDefault();
+			setQuery('');
+			setDialog({ kind: 'search' });
 		}
+		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'n') {
+			if (dialog || reloadConfirm) return;
+			e.preventDefault();
+			newChat(activeConversationKind, null, e.shiftKey);
+		}
+		if (e.key === 'Escape') {
+			setDialog(null);
+			setReloadConfirm(false);
+		}
+	};
+	useEffect(() => {
+		const keys = (e: KeyboardEvent) => keyHandlerRef.current(e);
 		window.addEventListener('keydown', keys);
 		return () => window.removeEventListener('keydown', keys);
-	});
-	useEffect(() => {
-		const showSettings = () => openSettings();
-		const startChat = () => {
+	}, []);
+	const menuCommandRef = useRef({
+		showSettings: () => openSettings(),
+		startChat: () => {
 			if (!settings) newChat();
-		};
+		},
+	});
+	menuCommandRef.current = {
+		showSettings: () => openSettings(),
+		startChat: () => {
+			if (!settings) newChat();
+		},
+	};
+	useEffect(() => {
+		const showSettings = () => menuCommandRef.current.showSettings();
+		const startChat = () => menuCommandRef.current.startChat();
 		window.addEventListener('freelm:new-chat', startChat);
 		window.addEventListener('freelm:settings', showSettings);
 		return () => {
 			window.removeEventListener('freelm:new-chat', startChat);
 			window.removeEventListener('freelm:settings', showSettings);
 		};
-	});
+	}, []);
 	useEffect(() => {
 		if (!dialog && !reloadConfirm) return;
 		const previous = document.activeElement as HTMLElement | null;
 		const timer = setTimeout(() => {
-			document.querySelector<HTMLElement>('[role="dialog"] input, [role="dialog"] button')?.focus();
+			const dialogElement = document.querySelector<HTMLElement>('.modal-backdrop [role="dialog"]');
+			const target =
+				dialogElement?.querySelector<HTMLElement>(
+					'input:not(:disabled), textarea:not(:disabled)',
+				) ??
+				dialogElement?.querySelector<HTMLElement>(
+					'button:not(:disabled), [href], [tabindex]:not([tabindex="-1"])',
+				);
+			target?.focus();
 		}, 30);
 		const trap = (e: KeyboardEvent) => {
 			if (e.key !== 'Tab') return;
@@ -1373,10 +1415,17 @@ export default function App() {
 			throw new Error('This response is finishing. Send your message again when it stops.');
 		const message: Message = { id: crypto.randomUUID(), role: 'user', content, attachments,
 			replyTo, createdAt: Date.now(), parentId: target.messages.at(-1)?.id ?? null };
-		const snapshot = { ...stateRef.current, threads: stateRef.current.threads.map(item =>
-			item.id === target.id ? { ...item, messages: [...item.messages, message], updatedAt: message.createdAt } : item) };
+		const applySteer = (current: AppState): AppState => ({
+			...current,
+			threads: current.threads.map((item) =>
+				item.id === target.id
+					? { ...item, messages: [...item.messages, message], updatedAt: message.createdAt }
+					: item,
+			),
+		});
+		const snapshot = applySteer(stateRef.current);
 		stateRef.current = snapshot;
-		setState(snapshot);
+		setState((current) => applySteer(current));
 		const workspace = workspaceRef.current;
 		const saved = saveQueue.current.catch(() => {}).then(() => saveState(
 			workspaceRef.current === workspace ? stateRef.current : snapshot, workspace));
@@ -2139,22 +2188,14 @@ export default function App() {
 						onUsage:
 							kind === 'code'
 								? (usage) => {
-										const goal = stateRef.current.threads.find((item) => item.id === id)?.goal;
-										if (
-											!goal ||
-											goal.status !== 'active' ||
-											workspaceRef.current !== requestWorkspace
-										)
-											return;
-										const accounted = accountGoal(goal, usage.tokens, 0, usage.estimated);
-										const latest = {
-											...stateRef.current,
-											threads: stateRef.current.threads.map((item) =>
-												item.id === id ? { ...item, goal: accounted } : item,
-											),
-										};
-										stateRef.current = latest;
-										setState(latest);
+										if (workspaceRef.current !== requestWorkspace) return;
+										updateThread(id, (item) => {
+											if (!item.goal || item.goal.status !== 'active') return item;
+											return {
+												...item,
+												goal: accountGoal(item.goal, usage.tokens, 0, usage.estimated),
+											};
+										});
 									}
 								: undefined,
 						compactionSettings: kind === 'code' ? stateRef.current.codeCompaction : undefined,
@@ -2387,13 +2428,49 @@ export default function App() {
 						if (ctl.signal.aborted || workspaceRef.current !== requestWorkspace)
 							throw new DOMException('Cancelled', 'AbortError');
 						const incoming = chatInput.take();
-						base = [...base, { ...pending, ...live, completedAt: Date.now() }];
+						const hasAssistantOutput = Boolean(
+							live.content?.trim() ||
+								live.toolCalls?.length ||
+								live.activity?.length ||
+								live.error ||
+								live.interrupted ||
+								live.agentTranscript?.items.length,
+						);
+						if (hasAssistantOutput) {
+							base = [...base, { ...pending, ...live, completedAt: Date.now() }];
+						}
 						for (const message of incoming) {
 							base.push({ ...message, parentId: base.at(-1)?.id ?? null });
 							recentImages.push(...(message.attachments ?? []).filter(a => a.type.startsWith('image/')));
 						}
+						const selectedState = stateRef.current;
+						const selectedThread = selectedState.threads.find((item) => item.id === id);
+						const selectedConnection = selectedState.connections.find(
+							(item) => item.id === selectedThread?.connectionId,
+						);
+						if (selectedThread && selectedConnection && selectedThread.model.trim()) {
+							try {
+								const nextThinking = resolveThinkingMode(
+									selectedConnection,
+									selectedThread.model,
+									selectedThread.thinkingMode,
+								).id;
+								segmentConnection = selectedConnection;
+								segmentModel = selectedThread.model.trim();
+								requestThinkingMode = nextThinking;
+							} catch {
+								// Keep the previous valid segment configuration if the edited selection is incomplete.
+							}
+						}
 						assistantId = crypto.randomUUID();
-						pending = { ...pending, id: assistantId, parentId: base.at(-1)?.id ?? null, createdAt: Date.now() };
+						pending = {
+							...pending,
+							id: assistantId,
+							model: segmentModel,
+							thinkingMode: requestThinkingMode,
+							parentId: base.at(-1)?.id ?? null,
+							createdAt: Date.now(),
+						};
 						live = { phase: 'working' };
 						output = '';
 						usedTools = false;
@@ -2586,6 +2663,11 @@ export default function App() {
 					return next;
 				});
 			finalSaveSucceeded = isTemporary;
+			if (workspaceRef.current === requestWorkspace) {
+				await new Promise<void>((resolve) =>
+					requestAnimationFrame(() => setTimeout(resolve, 0)),
+				);
+			}
 			if (workspaceRef.current === requestWorkspace) {
 				const checkpoint = stateRef.current;
 				saveQueue.current = saveQueue.current
@@ -2888,7 +2970,7 @@ export default function App() {
 		return (
 			<div className="loading-screen">
 				<h2>Workspace unavailable</h2>
-				<p>{fatal}</p>
+				<p>{userFacingError(fatal)}</p>
 				<button className="secondary-button" onClick={() => location.reload()}>
 					Try again
 				</button>
@@ -3114,11 +3196,26 @@ export default function App() {
 					<div className="storage-error" role="alert">
 						{userFacingError(storageError || workspaceError)}
 						<button
-							onClick={() =>
-								void saveState(state, workspaceId)
-									.then(() => setStorageError(''))
+							onClick={() => {
+								const target = workspaceRef.current;
+								const attempt = saveQueue.current
 									.catch(() => {})
-							}
+									.then(() => saveState(stateRef.current, target));
+								saveQueue.current = attempt;
+								void attempt
+									.then(() => {
+										if (workspaceRef.current === target) {
+											setStorageError('');
+											setWorkspaceError('');
+										}
+									})
+									.catch((error) => {
+										if (workspaceRef.current === target)
+											setStorageError(
+												`Changes could not be saved: ${error instanceof Error ? error.message : String(error)}`,
+											);
+									});
+							}}
 						>
 							Retry save
 						</button>
@@ -3147,25 +3244,37 @@ export default function App() {
 					</div>
 				)}
 				{pluginTabs.active ? (
-					<PluginWorkspace
-						key={pluginTabs.active.key}
-						choice={pluginTabs.active}
-						accounts={pluginTabs.accounts}
-						onSettings={() => selectMode('plugins')}
-					/>
+					<ErrorBoundary inline label="Plugin" resetKey={pluginTabs.active.key}>
+						<Suspense fallback={null}>
+							<PluginWorkspace
+								key={pluginTabs.active.key}
+								choice={pluginTabs.active}
+								accounts={pluginTabs.accounts}
+								onSettings={() => selectMode('plugins')}
+							/>
+						</Suspense>
+					</ErrorBoundary>
 				) : mode === 'plugins' ? (
-					<PluginSettings
-						sidebarContainer={pluginSidebar}
-						storefront
-						readOnly={workspaceId !== 'local'}
-						workspaceName={workspaceName}
-						connections={state.connections}
-						workspaceId={workspaceId}
-					/>
+					<ErrorBoundary inline label="Plugins" resetKey={workspaceId}>
+						<Suspense fallback={null}>
+							<PluginSettings
+								sidebarContainer={pluginSidebar}
+								storefront
+								readOnly={workspaceId !== 'local'}
+								workspaceName={workspaceName}
+								connections={state.connections}
+								workspaceId={workspaceId}
+							/>
+						</Suspense>
+					</ErrorBoundary>
 				) : mode === 'bots' ? (
-					botsWorkspace.content
+					<ErrorBoundary inline label="Bots" resetKey={workspaceId}>
+						{botsWorkspace.content}
+					</ErrorBoundary>
 				) : mode === 'workflows' ? (
-					<div className="workflow-host-surface">{workflowsWorkspace.content}</div>
+					<ErrorBoundary inline label="Workflows" resetKey={workspaceId}>
+						<div className="workflow-host-surface">{workflowsWorkspace.content}</div>
+					</ErrorBoundary>
 				) : mode === 'chat' || mode === 'code' ? (
 					<CodeSurfaceContext.Provider
 						value={activeConversationKind === 'code' ? workspaceTabs.actions : undefined}
@@ -3300,11 +3409,15 @@ export default function App() {
 										threadId &&
 										controllers.current.has(threadId) &&
 										activeConversationKind === 'code'
-									)
+									) {
 										enqueueCodeMessage(content, attachments, replyTo, composer);
-									else if (threadId && controllers.current.has(threadId) && activeConversationKind === 'chat')
+										return;
+									}
+									if (threadId && controllers.current.has(threadId) && activeConversationKind === 'chat') {
 										steerChat(content, attachments, replyTo);
-									else void runChat(content, attachments, undefined, replyTo, composer);
+										return;
+									}
+									return runChat(content, attachments, undefined, replyTo, composer);
 								}}
 								onStop={() => {
 									if (threadId) stopTask(threadId);
@@ -3460,37 +3573,41 @@ export default function App() {
 						</div>
 					</CodeSurfaceContext.Provider>
 				) : (
-					<Playground
-						key={workspaceId}
-						blocked={switching || !!storageError}
-						mode={mode}
-						connection={connection}
-						generations={state.generations}
-						moderationWarning={
-							mode === 'images' || mode === 'videos'
-								? moderationConfigurationWarning(
-										state.moderation,
-										mode === 'images' ? 'image' : 'video',
-										state.connections,
-									)
-								: undefined
-						}
-						onAdd={(generation) => {
-							if (workspaceRef.current === workspaceId) addGeneration(generation);
-						}}
-						onPrepareGeneration={prepareGeneration}
-						onUpdate={(id, patch) =>
-							workspaceRef.current === workspaceId &&
-							setState((s) => ({
-								...s,
-								generations: s.generations.map((g) => (g.id === id ? { ...g, ...patch } : g)),
-							}))
-						}
-						onDelete={(id) =>
-							setState((s) => ({ ...s, generations: s.generations.filter((g) => g.id !== id) }))
-						}
-						onSettings={() => openSettings()}
-					/>
+					<ErrorBoundary inline label="Playground" resetKey={`${workspaceId}:${mode}`}>
+						<Suspense fallback={null}>
+							<Playground
+								key={workspaceId}
+								blocked={switching || !!storageError}
+								mode={mode}
+								connection={connection}
+								generations={state.generations}
+								moderationWarning={
+									mode === 'images' || mode === 'videos'
+										? moderationConfigurationWarning(
+												state.moderation,
+												mode === 'images' ? 'image' : 'video',
+												state.connections,
+											)
+										: undefined
+								}
+								onAdd={(generation) => {
+									if (workspaceRef.current === workspaceId) addGeneration(generation);
+								}}
+								onPrepareGeneration={prepareGeneration}
+								onUpdate={(id, patch) =>
+									workspaceRef.current === workspaceId &&
+									setState((s) => ({
+										...s,
+										generations: s.generations.map((g) => (g.id === id ? { ...g, ...patch } : g)),
+									}))
+								}
+								onDelete={(id) =>
+									setState((s) => ({ ...s, generations: s.generations.filter((g) => g.id !== id) }))
+								}
+								onSettings={() => openSettings()}
+							/>
+						</Suspense>
+					</ErrorBoundary>
 				)}
 				{switching && (
 					<div className="workspace-switching" role="status">
@@ -3546,125 +3663,160 @@ export default function App() {
 				</div>
 			)}
 			{settings && (
-				<Settings
-     onWelcome={workspaceId === 'local' ? () => leaveSettings(() => setWelcomeOpen(true)) : undefined}
-					key={workspaceId}
-					initialSection={settingsSection}
-					onOpenPlugins={() => leaveSettings(() => selectMode('plugins'))}
-					sectionRequest={settingsSectionRequest}
-					onExitCancel={() => {
-						afterSettings.current = null;
-					}}
-					exitRequest={settingsExitRequest}
-					activeWorkspaceId={workspaceId}
-					workspaceName={workspaceName}
-					onSelectWorkspace={(id) => switchWorkspace(id)}
-					remote={workspaceId !== 'local'}
-					state={state}
-					secureStorage={storageInfo.secure}
-					secureStorageChecked={storageInfo.checked}
-					storageLocation={storageInfo.location}
-					memorySupported={memorySupported}
-					personalizationSupported={personalizationSupported}
-					codeCompactionSupported={codeCompactionSupported}
-					moderationSupported={moderationSupported}
-					activeKind={activeConversationKind}
-					activeThreadId={threadId ?? undefined}
-					activeProjectId={projectId ?? undefined}
-					onBuildSystemPrompt={buildPromptPreview}
-					lastSentSystemPrompt={
-						lastSentPrompt?.workspaceId === workspaceId ? lastSentPrompt : undefined
-					}
-					onMemoryChange={
-						memorySupported
-							? async (mutation) => {
-									await changeMemory(mutation, 'user');
-								}
-							: undefined
-					}
-					onClearMemorySummaries={
-						memorySupported
-							? async () => {
-									const targetWorkspace = workspaceRef.current;
-									if (transitioning.current)
-										throw new Error('Wait for the workspace to finish opening.');
-									summaryQueue.current.stop();
-									const previous = stateRef.current;
-									const next = {
-										...stateRef.current,
-										threads: stateRef.current.threads.map((item) => {
-											if (!item.memorySummary) return item;
-											const { memorySummary: _summary, ...rest } = item;
-											return rest;
-										}),
-									};
-									stateRef.current = next;
-									setState(next);
-									const save = saveQueue.current
-										.catch(() => {})
-										.then(() => saveState(next, targetWorkspace));
-									saveQueue.current = save;
-									try {
-										await save;
-										setStorageError('');
-									} catch (error) {
-										if (workspaceRef.current === targetWorkspace) {
-											const restore = (state: AppState): AppState => ({
-												...state,
-												threads: state.threads.map((item) => {
-													const old = previous.threads.find((thread) => thread.id === item.id);
-													return !item.memorySummary &&
-														old?.memorySummary &&
-														item.messages === old.messages &&
-														item.projectId === old.projectId
-														? { ...item, memorySummary: old.memorySummary }
-														: item;
-												}),
-											});
-											stateRef.current = restore(stateRef.current);
-											setState(restore);
-											setStorageError(
-												`Summary changes could not be saved: ${error instanceof Error ? error.message : String(error)}`,
-											);
+				<ErrorBoundary label="Settings" resetKey={workspaceId} onReset={() => setSettings(false)}>
+					<Suspense fallback={null}>
+						<Settings
+							onWelcome={workspaceId === 'local' ? () => leaveSettings(() => setWelcomeOpen(true)) : undefined}
+							key={workspaceId}
+							initialSection={settingsSection}
+							onOpenPlugins={() => leaveSettings(() => selectMode('plugins'))}
+							sectionRequest={settingsSectionRequest}
+							onExitCancel={() => {
+								afterSettings.current = null;
+							}}
+							exitRequest={settingsExitRequest}
+							activeWorkspaceId={workspaceId}
+							workspaceName={workspaceName}
+							onSelectWorkspace={(id) => switchWorkspace(id)}
+							remote={workspaceId !== 'local'}
+							state={state}
+							secureStorage={storageInfo.secure}
+							secureStorageChecked={storageInfo.checked}
+							storageLocation={storageInfo.location}
+							memorySupported={memorySupported}
+							personalizationSupported={personalizationSupported}
+							codeCompactionSupported={codeCompactionSupported}
+							moderationSupported={moderationSupported}
+							activeKind={activeConversationKind}
+							activeThreadId={threadId ?? undefined}
+							activeProjectId={projectId ?? undefined}
+							onBuildSystemPrompt={buildPromptPreview}
+							lastSentSystemPrompt={
+								lastSentPrompt?.workspaceId === workspaceId ? lastSentPrompt : undefined
+							}
+							onMemoryChange={
+								memorySupported
+									? async (mutation) => {
+											await changeMemory(mutation, 'user');
 										}
-										throw error;
-									}
+									: undefined
+							}
+							onClearMemorySummaries={
+								memorySupported
+									? async () => {
+											const targetWorkspace = workspaceRef.current;
+											if (transitioning.current)
+												throw new Error('Wait for the workspace to finish opening.');
+											summaryQueue.current.stop();
+											const previous = stateRef.current;
+											const next = {
+												...stateRef.current,
+												threads: stateRef.current.threads.map((item) => {
+													if (!item.memorySummary) return item;
+													const { memorySummary: _summary, ...rest } = item;
+													return rest;
+												}),
+											};
+											stateRef.current = next;
+											setState(next);
+											const save = saveQueue.current
+												.catch(() => {})
+												.then(() => saveState(next, targetWorkspace));
+											saveQueue.current = save;
+											try {
+												await save;
+												setStorageError('');
+											} catch (error) {
+												if (workspaceRef.current === targetWorkspace) {
+													const restore = (state: AppState): AppState => ({
+														...state,
+														threads: state.threads.map((item) => {
+															const old = previous.threads.find((thread) => thread.id === item.id);
+															return !item.memorySummary &&
+																old?.memorySummary &&
+																item.messages === old.messages &&
+																item.projectId === old.projectId
+																? { ...item, memorySummary: old.memorySummary }
+																: item;
+														}),
+													});
+													stateRef.current = restore(stateRef.current);
+													setState(restore);
+													setStorageError(
+														`Summary changes could not be saved: ${error instanceof Error ? error.message : String(error)}`,
+													);
+												}
+												throw error;
+											}
+										}
+									: undefined
+							}
+							onRestoreThread={(id) => updateThread(id, (item) => ({ ...item, archivedAt: undefined }))}
+							onClose={() => {
+								setSettings(false);
+								const action = afterSettings.current;
+								afterSettings.current = null;
+								action?.();
+							}}
+							onSave={async (values) => {
+								const { connections, activeConnectionId } = values;
+								const nextConnection =
+									connections.find((c) => c.id === activeConnectionId) ?? connections[0];
+								const shouldUpdateModel =
+									!!nextConnection &&
+									(activeConnectionId !== connection.id ||
+										!modelSupports(nextConnection, model, 'chat'));
+								const nextModel = shouldUpdateModel ? defaultModel(nextConnection, 'chat') : model;
+								const nextThinking = shouldUpdateModel
+									? defaultThinkingMode(nextConnection, nextModel) || ''
+									: thinkingMode;
+								const applySettings = (current: AppState): AppState => {
+									const merged: AppState = { ...current, ...values };
+									if (!shouldUpdateModel || !threadId || !nextConnection) return merged;
+									return {
+										...merged,
+										threads: merged.threads.map((t) =>
+											t.id === threadId
+												? {
+														...t,
+														connectionId: nextConnection.id,
+														model: nextModel,
+														thinkingMode: nextThinking || undefined,
+														messages: t.messages.map((m) =>
+															m.role === 'assistant' && !m.model
+																? { ...m, model: t.model, thinkingMode: t.thinkingMode }
+																: m,
+														),
+													}
+												: t,
+										),
+									};
+								};
+								const savedWorkspaceId = workspaceRef.current;
+								await saveQueue.current.catch(() => {});
+								const candidate = applySettings(stateRef.current);
+								const savePromise = saveState(candidate, savedWorkspaceId);
+								saveQueue.current = savePromise.catch(() => {});
+								await savePromise;
+								if (workspaceRef.current !== savedWorkspaceId) return;
+								if (!memorySettings(candidate).referenceHistory) summaryQueue.current.stop();
+								const committed = applySettings(stateRef.current);
+								stateRef.current = committed;
+								setState(committed);
+								if (shouldUpdateModel) {
+									setModel(nextModel);
+									setThinkingMode(nextThinking);
 								}
-							: undefined
-					}
-					onRestoreThread={(id) => updateThread(id, (item) => ({ ...item, archivedAt: undefined }))}
-					onClose={() => {
-						setSettings(false);
-						const action = afterSettings.current;
-						afterSettings.current = null;
-						action?.();
-					}}
-					onSave={async (values) => {
-						const { connections, activeConnectionId } = values;
-						const next = { ...stateRef.current, ...values };
-						if (!memorySettings(next).referenceHistory) summaryQueue.current.stop();
-						stateRef.current = next;
-						setState(next);
-						const nextConnection = connections.find((c) => c.id === activeConnectionId)!;
-						if (
-							activeConnectionId !== connection.id ||
-							!modelSupports(nextConnection, model, 'chat')
-						) {
-							selectModel(defaultModel(nextConnection, 'chat'), nextConnection);
-						}
-						// Preserve an explicit thinking selection. If removed, the composer asks the user
-						// to choose again instead of silently sending different reasoning parameters.
-						await saveQueue.current.catch(() => {});
-						await saveState(stateRef.current, workspaceRef.current);
-						setStorageError('');
-						const savedWorkspaceId = workspaceRef.current;
-						void getStorageInfo(savedWorkspaceId)
-							.then((info) => {
-								if (workspaceRef.current === savedWorkspaceId) setStorageInfo(info);
-							})
-							.catch(() => {});
-					}}
-				/>
+								setStorageError('');
+								void getStorageInfo(savedWorkspaceId)
+									.then((info) => {
+										if (workspaceRef.current === savedWorkspaceId) setStorageInfo(info);
+									})
+									.catch(() => {});
+							}}
+						/>
+					</Suspense>
+				</ErrorBoundary>
 			)}
 
    <WelcomeOnboarding open={welcomeOpen && workspaceId === 'local'}
@@ -3756,17 +3908,32 @@ export default function App() {
 									/>
 								</div>
 								<div className="search-results">
-									{state.threads
-										.filter((item) => threadKind(item, state.projects) === activeConversationKind)
-										.filter(
-											(t) =>
-												!query.trim() ||
-												`${t.title} ${t.messages.map((m) => m.content).join(' ')}`
-													.toLowerCase()
-													.includes(query.trim().toLowerCase()),
-										)
-										.sort((a, b) => b.updatedAt - a.updatedAt)
-										.map((t) => (
+									{(() => {
+										const matches = state.threads
+											.filter(
+												(item) =>
+													!item.archivedAt &&
+													!item.temporary &&
+													threadKind(item, state.projects) === activeConversationKind,
+											)
+											.filter(
+												(t) =>
+													!query.trim() ||
+													`${t.title} ${t.messages.map((m) => m.content).join(' ')}`
+														.toLowerCase()
+														.includes(query.trim().toLowerCase()),
+											)
+											.sort((a, b) => b.updatedAt - a.updatedAt);
+										if (!matches.length) {
+											return (
+												<p>
+													{query.trim()
+														? `No ${activeConversationKind === 'code' ? 'tasks' : 'conversations'} match “${query.trim()}”.`
+														: `No ${activeConversationKind === 'code' ? 'tasks' : 'conversations'} yet. Start a new ${activeConversationKind === 'code' ? 'task' : 'chat'} to begin.`}
+												</p>
+											);
+										}
+										return matches.map((t) => (
 											<button key={t.id} onClick={() => selectThread(t.id)}>
 												<MessageCircle size={18} />
 												<span>
@@ -3776,8 +3943,8 @@ export default function App() {
 													</small>
 												</span>
 											</button>
-										))}
-									{!state.threads.length && <p>No conversations yet. Start a new chat to begin.</p>}
+										));
+									})()}
 								</div>
 							</>
 						) : (

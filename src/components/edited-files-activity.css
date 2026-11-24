@@ -48,10 +48,18 @@
 	flex: 0 0 auto;
 }
 .edited-lines-added {
-	color: #58bb82;
+	color: #65c98f;
 }
 .edited-lines-removed {
-	color: #e67e84;
+	color: #ef8a90;
+}
+:root[data-theme='light'] .edited-lines-added,
+:root[data-theme='light'] .edited-diff-added {
+	color: #1a6e34;
+}
+:root[data-theme='light'] .edited-lines-removed,
+:root[data-theme='light'] .edited-diff-removed {
+	color: #a62029;
 }
 .edited-files-chevron {
 	flex: 0 0 auto;

@@ -29,6 +29,15 @@ import { useCodeSurfaceActions } from './code-surface-context';
 import { userFacingError } from '../lib/user-facing-error';
 import './CodeHtmlPreview.css';
 
+function parentDirectoryPath(directory: string): string {
+	const trimmed = directory.replace(/[\\/]+$/, '');
+	const sepIndex = Math.max(trimmed.lastIndexOf('/'), trimmed.lastIndexOf('\\'));
+	if (sepIndex < 0) return '/';
+	if (sepIndex === 0) return trimmed[0] === '\\' ? '\\' : '/';
+	const parent = trimmed.slice(0, sepIndex);
+	return /^[a-zA-Z]:$/.test(parent) ? `${parent}\\` : parent;
+}
+
 export type SurfaceSearch = (
 	query: string,
 ) => Promise<import('../composer-types').ComposerDiscoveryResult>;
@@ -209,9 +218,7 @@ export function WorkspaceFiles({
 					<button
 						onClick={() => {
 							const root = data?.roots.find((root) => directory === root.path);
-							setDirectory(
-								root ? undefined : directory.slice(0, directory.lastIndexOf('/')) || '/',
-							);
+							setDirectory(root ? undefined : parentDirectoryPath(directory));
 						}}
 					>
 						..
@@ -391,7 +398,7 @@ export default function CodeFilePanel({
 	const isMarkdown = /\.(md|markdown)$/i.test(result?.name || path);
 	const isHtml = /\.html?$/i.test(result?.name || path);
 	const crumbs = useMemo(
-		() => (result?.path || path).split('/').filter(Boolean),
+		() => (result?.path || path).split(/[\\/]/).filter(Boolean),
 		[path, result?.path],
 	);
 	return (

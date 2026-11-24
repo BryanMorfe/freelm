@@ -105,10 +105,10 @@ export function resolveAppearance(
 	if (settings.accent === 'default')
 		return theme === 'dark'
 			? {
-					bubble: '#2f2f2f',
+					bubble: '#242424',
 					bubbleText: '#ececec',
 					primary: '#f1f1f1',
-					onPrimary: '#171717',
+					onPrimary: '#141414',
 					accent: '#a8d6bd',
 				}
 			: {
@@ -130,5 +130,18 @@ export function resolveAppearance(
 		primary,
 		onPrimary: foreground(primary),
 		accent: theme === 'dark' ? '#a8d6bd' : '#276346',
+	};
+}
+
+/** Provide a subtle hairline border whenever a surface accent blends into the theme background. */
+export function appearanceSurfaceBorders(
+	colors: AppearanceColors,
+	theme: 'light' | 'dark',
+): { primaryBorder: string; bubbleBorder: string } {
+	const background = theme === 'dark' ? '#121212' : '#ffffff';
+	const edge = theme === 'dark' ? '#ffffff38' : '#00000024';
+	return {
+		primaryBorder: contrast(colors.primary, background) < 1.4 ? edge : 'transparent',
+		bubbleBorder: contrast(colors.bubble, background) < 1.4 ? edge : 'transparent',
 	};
 }

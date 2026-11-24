@@ -206,6 +206,8 @@ let shutdown: Promise<void> | undefined;
 let quitRequested = false;
 let closeRequested = false;
 let allowWindowClose = false;
+let closeFallbackTimer: ReturnType<typeof setTimeout> | undefined;
+let pendingMenuCommand: 'new-chat' | 'settings' | null = null;
 const requests = new Map<string, AbortController>();
 const workspaceTransfers = new WorkspaceTransferPool();
 const rendererCrashBudget = new CrashBudget();
@@ -875,8 +877,9 @@ function registerBridge() {
 			validateAssetUrl(url);
 			if (kind !== 'image' && kind !== 'video') throw new Error('Unsupported media type.');
 			if (target === 'local') {
-				const snapshot = await authority.load();
-				if (!snapshot.state?.connections.some((connection) => connection.id === connectionId))
+				const snapshot = await authority.loadModerationState();
+				const connection = snapshot.connections.find((item) => item.id === connectionId);
+				if (!connection)
 					throw new Error('The media API connection is no longer available.');
 				if (requests.size >= 20) throw new Error('Too much media is loading. Try again shortly.');
 				const id = `asset:${crypto.randomUUID()}`;
@@ -886,6 +889,7 @@ function registerBridge() {
 					return await (kind === 'video' ? downloadVideoAsset : downloadImageAsset)(
 						url,
 						controller.signal,
+						connection.baseUrl,
 					);
 				} finally {
 					requests.delete(id);
@@ -939,6 +943,8 @@ function registerBridge() {
 	ipcMain.handle('freelm:complete-close', async (event) => {
 		validateSender(event);
 		if (!closeRequested || allowWindowClose) return;
+		clearTimeout(closeFallbackTimer);
+		closeFallbackTimer = undefined;
 		await authority.load();
 		await store.flush();
 		if (quitRequested) await closeInstances();
@@ -953,8 +959,17 @@ function registerBridge() {
 
 function createMenu() {
 	const isMac = process.platform === 'darwin';
-	const command = (name: 'new-chat' | 'settings') =>
-		mainWindow?.webContents.send('freelm:command', name);
+	const command = (name: 'new-chat' | 'settings') => {
+		if (!mainWindow || mainWindow.isDestroyed()) {
+			pendingMenuCommand = name;
+			createWindow();
+			return;
+		}
+		if (mainWindow.isMinimized()) mainWindow.restore();
+		mainWindow.show();
+		mainWindow.focus();
+		mainWindow.webContents.send('freelm:command', name);
+	};
 	const template: MenuItemConstructorOptions[] = [
 		...(isMac
 			? [
@@ -1017,7 +1032,7 @@ function createWindow() {
 		minHeight: 600,
 		title: 'FreeLM',
 		icon: appIconPath,
-		backgroundColor: '#212121',
+		backgroundColor: '#121212',
 		show: false,
 		...(process.platform === 'darwin'
 			? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 20, y: 19 } }
@@ -1128,11 +1143,26 @@ function createWindow() {
 		cleanup = undefined;
 		recovery.loaded();
 		agent?.replayApprovals();
+		if (pendingMenuCommand) {
+			const commandName = pendingMenuCommand;
+			pendingMenuCommand = null;
+			contents.send('freelm:command', commandName);
+		}
 	});
 	contents.on('render-process-gone', (_event, details) => {
 		rendererUnavailable = true;
 		if (quitRequested || closeRequested) {
-			void detachRenderer().catch(() => { void logRecovery('renderer', 'cleanup-failed'); });
+			clearTimeout(closeFallbackTimer);
+			closeFallbackTimer = undefined;
+			void detachRenderer()
+				.catch(() => {
+					void logRecovery('renderer', 'cleanup-failed');
+				})
+				.finally(() => {
+					allowWindowClose = true;
+					if (!window.isDestroyed()) window.close();
+					if (quitRequested) app.quit();
+				});
 			return;
 		}
 		recovery.failed({ reason: details.reason, exitCode: details.exitCode });
@@ -1173,10 +1203,30 @@ function createWindow() {
 			.catch((error) => console.error('Detached renderer task recovery:', error));
 		void cancelAgentRuns?.();
 		for (const controller of requests.values()) controller.abort();
+		clearTimeout(closeFallbackTimer);
+		closeFallbackTimer = setTimeout(() => {
+			closeFallbackTimer = undefined;
+			if (!closeRequested || allowWindowClose) return;
+			void detachRenderer()
+				.catch(() => {
+					void logRecovery('renderer', 'close-timeout-cleanup-failed');
+				})
+				.finally(() => {
+					allowWindowClose = true;
+					if (!window.isDestroyed()) window.close();
+					if (quitRequested) app.quit();
+				});
+		}, 5000);
 		contents.send('freelm:prepare-close');
 	});
 	mainWindow.on('closed', () => {
+		clearTimeout(closeFallbackTimer);
+		closeFallbackTimer = undefined;
 		recovery.dispose();
+		pluginSurfaces?.closeOwner(contents.id);
+		pluginViews.clear();
+		codeHtmlViews.clear();
+		agent?.rejectAll();
 		void botTasks
 			?.rendererClosed()
 			.catch((error) => console.error('Detached renderer task recovery:', error));
@@ -1672,7 +1722,8 @@ app.on('before-quit', (event) => {
 function closeInstances() {
 	pluginSurfaces?.closeAll();
 	workflowPreviews?.clear();
-	return (shutdown ??= Promise.all([
+	agent?.rejectAll();
+	return (shutdown ??= Promise.allSettled([
 		scheduler?.close(),
 		workflowNotifications?.close(),
 		workflows?.dispose().then(() => workflowAdapters?.close()),
@@ -1682,10 +1733,21 @@ function closeInstances() {
 		instances.close(),
 		agent?.service.close(),
 		search?.close(),
-	]).then(async () => {
-		await completionNotifications?.close();
-		managerClosed = true;
-	}));
+	])
+		.then(async (results) => {
+			for (const result of results) {
+				if (result.status === 'rejected') {
+					console.error('Subsystem close error during shutdown:', result.reason);
+				}
+			}
+			await store?.flush().catch((error) => console.error('Store flush error on shutdown:', error));
+			await completionNotifications?.close().catch(() => undefined);
+			managerClosed = true;
+		})
+		.catch((error) => {
+			shutdown = undefined;
+			throw error;
+		}));
 }
 
 function showSchedulerNotification(title: string, body: string) {
@@ -1696,7 +1758,7 @@ function showSchedulerNotification(title: string, body: string) {
 	});
 	notification.on('click', () => {
 		pendingSchedulerNavigation = true;
-		if (!mainWindow) createWindow();
+		if (!mainWindow || mainWindow.isDestroyed()) createWindow();
 		mainWindow?.show();
 		mainWindow?.focus();
 		mainWindow?.webContents.send('freelm:open-scheduler');

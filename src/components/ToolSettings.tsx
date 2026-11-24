@@ -36,9 +36,17 @@ interface Props {
 	onSearchSettings: () => void;
 }
 
+function isAbsolutePath(candidate: string): boolean {
+	return (
+		candidate.startsWith('/') ||
+		/^[a-zA-Z]:[\\/]/.test(candidate) ||
+		candidate.startsWith('\\\\')
+	);
+}
+
 /** Catch configuration errors before leaving the settings page. Host validation is authoritative. */
 export function assertToolSettingsValues(value: ToolSettingsValue, connections: Connection[]) {
-	if (value.workspaceRoot.trim() && !value.workspaceRoot.startsWith('/'))
+	if (value.workspaceRoot.trim() && !isAbsolutePath(value.workspaceRoot))
 		throw new Error('Use an absolute working directory path in Tools.');
 	if (!['ask', 'auto-review', 'full-access', 'trusted'].includes(value.approvalMode))
 		throw new Error('Choose a Code permission mode in Tools.');
@@ -85,7 +93,7 @@ export function assertToolSettingsValues(value: ToolSettingsValue, connections: 
 		}
 	}
 	for (const directory of value.skillDirectories) {
-		if (!directory.startsWith('/'))
+		if (!isAbsolutePath(directory))
 			throw new Error('Use an absolute path for each skill directory, or remove the empty entry.');
 	}
 }

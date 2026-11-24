@@ -563,16 +563,16 @@
 	color: var(--text, #eee) !important;
 }
 .media-workspace .is-recording {
-	color: #f48989 !important;
+	color: var(--danger) !important;
 }
 .media-form-error {
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 12px;
-	background: #f1777712;
-	border: 1px solid #f1777730;
-	color: #f1a8a8;
+	background: color-mix(in srgb, var(--danger) 12%, transparent);
+	border: 1px solid color-mix(in srgb, var(--danger) 30%, transparent);
+	color: var(--danger);
 	border-radius: 10px;
 	margin-bottom: 12px;
 	padding: 8px 10px 8px 14px;

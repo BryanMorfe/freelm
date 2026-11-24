@@ -8,6 +8,7 @@ import type { Socket } from 'node:net';
 import type { RemoteInfo } from '../src/remote-types';
 import type { Connection, WireRequest, WireResponse } from '../src/types';
 import { apiUrl } from './transport';
+import { assertSafeMediaAssetUrl, detectSupportedMediaContentType } from './image-assets';
 import { MediaModerationGuard } from './media-moderation';
 import { validateRequest, validateState } from './validation';
 import { WorkspaceAuthority, WorkspaceConflictError } from './workspace-authority';
@@ -264,8 +265,8 @@ export class InstanceHost {
 	private async connection(id: unknown): Promise<Connection> {
 		if (typeof id !== 'string' || !id || id.length > 256)
 			throw new HttpError(400, 'A valid connection identifier is required.');
-		const snapshot = await this.options.authority.load();
-		const connection = snapshot.state?.connections.find((item) => item.id === id);
+		const snapshot = await this.options.authority.loadModerationState();
+		const connection = snapshot.connections.find((item) => item.id === id);
 		if (!connection) throw new HttpError(404, 'This API connection does not exist on the host.');
 		return connection;
 	}
@@ -854,11 +855,19 @@ export class InstanceHost {
 		const input = await readJson(request);
 		if (!record(input) || typeof input.url !== 'string' || input.url.length > 32_768)
 			throw new HttpError(400, 'A valid media URL is required.');
-		await this.connection(input.connectionId);
+		const connection = await this.connection(input.connectionId);
 		if (response.destroyed) return;
-		const url = new URL(input.url);
-		if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password)
-			throw new HttpError(400, 'Use an HTTP or HTTPS media URL without embedded credentials.');
+		let url: URL;
+		try {
+			url = assertSafeMediaAssetUrl(input.url, connection.baseUrl);
+		} catch (error) {
+			throw new HttpError(
+				400,
+				error instanceof Error
+					? error.message
+					: 'Use an HTTP or HTTPS media URL without embedded credentials.',
+			);
+		}
 		if (this.requests.size >= 20)
 			throw new HttpError(429, 'Too many requests are running on the host.');
 		const controller = new AbortController();
@@ -872,6 +881,16 @@ export class InstanceHost {
 				redirect: 'error',
 				signal: AbortSignal.any([controller.signal, AbortSignal.timeout(120_000)]),
 			});
+			if (!upstream.ok) {
+				await upstream.body?.cancel();
+				sendJson(response, 200, {
+					status: upstream.status,
+					contentType: 'text/plain',
+					body: `Could not load media (HTTP ${upstream.status}).`,
+					encoding: 'text',
+				} satisfies WireResponse);
+				return;
+			}
 			if (Number(upstream.headers.get('content-length')) > MAX_ASSET_BYTES) {
 				await upstream.body?.cancel();
 				throw new Error('Remote media exceeds the 32 MB download limit.');
@@ -896,11 +915,18 @@ export class InstanceHost {
 				reader?.releaseLock();
 			}
 			const body = Buffer.concat(chunks);
+			const contentType = detectSupportedMediaContentType(
+				body,
+				upstream.headers.get('content-type'),
+			);
+			if (!contentType) {
+				throw new HttpError(400, 'The server did not return supported image or video media.');
+			}
 			const result: WireResponse = {
 				status: upstream.status,
-				contentType: upstream.headers.get('content-type') ?? 'application/octet-stream',
-				body: body.toString(upstream.ok ? 'base64' : 'utf8'),
-				encoding: upstream.ok ? 'base64' : 'text',
+				contentType,
+				body: body.toString('base64'),
+				encoding: 'base64',
 			};
 			sendJson(response, 200, result);
 		} finally {

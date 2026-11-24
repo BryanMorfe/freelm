@@ -192,7 +192,13 @@ export async function connectOAuth(
 			response.writeHead(400).end('Invalid authorization callback.');
 			return;
 		}
-		const url = new URL(request.url || '/', callbackOrigin);
+		let url: URL;
+		try {
+			url = new URL(request.url || '/', callbackOrigin);
+		} catch {
+			response.writeHead(400).end('Invalid authorization callback.');
+			return;
+		}
 		const incoming = url.searchParams.get('state') || '';
 		const incomingBytes = Buffer.from(incoming);
 		const stateBytes = Buffer.from(state);

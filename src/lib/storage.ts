@@ -13,6 +13,12 @@ const sessionKeys = new Map<string, string>();
 let pendingSave: Promise<void> = Promise.resolve();
 const revisions = new Map<string, string>();
 const desktopSaves = new Map<string, Promise<void>>();
+interface QueuedSave {
+	snapshot: AppState;
+	committed: boolean;
+	parent?: QueuedSave;
+}
+const queuedSaves = new Map<string, QueuedSave>();
 const conflicts = new Map<string, Error>();
 const acceptedStates = new Map<string, AppState>();
 const capturedStates = new Map<string, { source: AppState; snapshot: AppState }>();
@@ -111,6 +117,7 @@ export function acceptWorkspaceSnapshot(
 	if (targetId !== 'local') moderationSupport.set(targetId, snapshot.moderationSupported === true);
 	revisions.set(targetId, snapshot.revision);
 	conflicts.delete(targetId);
+	queuedSaves.delete(targetId);
 	if (snapshot.state) {
 		// AppState is updated immutably. Keep top-level references so changing a chat
 		// does not copy or transfer every embedded image in the media gallery.
@@ -225,7 +232,9 @@ export async function saveState(state: AppState, targetId = 'local'): Promise<vo
 		if (!workspaceSupportsModeration(targetId) && state.moderation !== undefined)
 			throw new Error('Update this remote FreeLM instance to configure media moderation.');
 		const snapshot = captureState(state, targetId);
-		const base = acceptedStates.get(targetId);
+		const fallbackBase = acceptedStates.get(targetId);
+		const entry: QueuedSave = { snapshot, committed: false, parent: queuedSaves.get(targetId) };
+		queuedSaves.set(targetId, entry);
 		const next = (desktopSaves.get(targetId) || Promise.resolve())
 			.catch(() => {})
 			.then(async () => {
@@ -233,6 +242,13 @@ export async function saveState(state: AppState, targetId = 'local'): Promise<vo
 				const revision = revisions.get(targetId);
 				if (!revision) throw new Error('Load this workspace before saving it.');
 				try {
+					let base = fallbackBase;
+					for (let cursor = entry.parent; cursor; cursor = cursor.parent) {
+						if (cursor.committed) {
+							base = cursor.snapshot;
+							break;
+						}
+					}
 					const concurrentHost =
 						targetId === 'local' && !!window.desktop!.hostTasksSnapshot && !!base;
 					let expected = revision;
@@ -271,6 +287,7 @@ export async function saveState(state: AppState, targetId = 'local'): Promise<vo
 						const applyRebase =
 							nextState !== snapshot ? prepareRebase(targetId, snapshot, nextState) : undefined;
 						acceptedStates.set(targetId, nextState);
+						entry.committed = true;
 						applyRebase?.();
 						break;
 					}
@@ -278,6 +295,8 @@ export async function saveState(state: AppState, targetId = 'local'): Promise<vo
 					const failure = error instanceof Error ? error : new Error(String(error));
 					if (failure.message.includes('WORKSPACE_CONFLICT')) conflicts.set(targetId, failure);
 					throw failure;
+				} finally {
+					if (queuedSaves.get(targetId) === entry) queuedSaves.delete(targetId);
 				}
 			});
 		desktopSaves.set(targetId, next);

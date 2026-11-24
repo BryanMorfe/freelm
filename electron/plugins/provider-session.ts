@@ -4,7 +4,7 @@ let active = 0;
 export function createProviderSession(code: string, name: string, signal: AbortSignal, workerPath?: string) {
 	signal.throwIfAborted();
 	if (active >= 8 || Buffer.byteLength(code) > 4 * 1024 * 1024) throw new Error('Provider session limit exceeded.');
-	const worker = new Worker(workerPath ?? pluginWorkerPath('runtime'), { workerData: { providerSession: true, code, name }, resourceLimits: { maxOldGenerationSizeMb: 96, stackSizeMb: 2 } });
+	const worker = new Worker(workerPath ?? pluginWorkerPath('runtime'), { env: {}, workerData: { providerSession: true, code, name }, resourceLimits: { maxOldGenerationSizeMb: 96, stackSizeMb: 2 } });
 	active++;
 	let stopped = false, serial = 0, ready = false;
 	let pending: { id: number; json: string; resolve(value: unknown): void; reject(error: Error): void; timer: ReturnType<typeof setTimeout> } | undefined;

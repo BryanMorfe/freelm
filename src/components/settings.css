@@ -499,13 +499,13 @@ body:has(.settings-page) .select-popup > button {
 	height: 20px;
 }
 .theme-preview-dark {
-	background: #252525;
+	background: #161616;
 }
 .theme-preview-dark > i {
-	background: #171717;
+	background: #0e0e0e;
 }
 .theme-preview-dark b {
-	background: #424242;
+	background: #2e2e2e;
 }
 .theme-preview-system {
 	position: relative;
@@ -537,13 +537,13 @@ body:has(.settings-page) .select-popup > button {
 }
 .theme-preview-system > .theme-system-dark {
 	clip-path: inset(0 0 0 50%);
-	background: #252525;
+	background: #161616;
 }
 .theme-system-dark > i {
-	background: #171717;
+	background: #0e0e0e;
 }
 .theme-system-dark b {
-	background: #424242;
+	background: #2e2e2e;
 }
 .theme-option-name {
 	display: flex;

@@ -23,7 +23,7 @@ const MAX_IMAGE_BYTES = 8 * 1024 * 1024;
 const MAX_HTTP_RESPONSE_BYTES = 12 * 1024 * 1024;
 
 const boundedFetch: typeof fetch = async (input, init) => {
-	const response = await fetch(input, init);
+	const response = await fetch(input, { ...init, redirect: 'error' });
 	if (!response.body) return response;
 	let size = 0;
 	const body = response.body.pipeThrough(

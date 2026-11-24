@@ -1,8 +1,14 @@
 .code-workspace-panel {
-	--code-keyword: #b874d9;
-	--code-string: #619e65;
-	--code-number: #c48c55;
-	--code-type: #5c9ecf;
+	--code-keyword: #c58af9;
+	--code-string: #72c48a;
+	--code-number: #dfb16b;
+	--code-type: #78b7e6;
+}
+:root[data-theme='light'] .code-workspace-panel {
+	--code-keyword: #7a2da8;
+	--code-string: #1f6f43;
+	--code-number: #8d5210;
+	--code-type: #145fa8;
 }
 .code-workspace-panel {
 	min-width: 0;
@@ -303,7 +309,7 @@
 	color: var(--muted);
 }
 .code-surface-error {
-	color: var(--error, #f38888);
+	color: var(--danger);
 }
 .code-changes-panel {
 	height: 100%;
@@ -358,6 +364,14 @@
 .code-git-diff .removed {
 	background: #ce4e5522;
 	color: #f09292;
+}
+:root[data-theme='light'] .code-git-diff .added {
+	background: #1f883d1a;
+	color: #1a6e34;
+}
+:root[data-theme='light'] .code-git-diff .removed {
+	background: #cf222e1a;
+	color: #a62029;
 }
 .code-git-diff .heading {
 	color: var(--accent);

@@ -3,6 +3,7 @@ import {
 	Fragment,
 	lazy,
 	Suspense,
+	useCallback,
 	useEffect,
 	useLayoutEffect,
 	useMemo,
@@ -296,18 +297,21 @@ export default function Chat(p: Props) {
 	const pendingAttachments = useRef(0);
 	const pendingComposerFocus = useRef<string | undefined>(undefined);
 	useLayoutEffect(() => {
-		if (submitting || pendingComposerFocus.current !== draftScope) return;
+		if (submitting || pendingComposerFocus.current !== draftScope || !composerEditor.current)
+			return;
 		pendingComposerFocus.current = undefined;
-		composerEditor.current?.focus();
+		composerEditor.current.focus();
 	});
 	const fileInput = useRef<HTMLInputElement>(null);
 	const follow = useRef(true);
+	const smoothJumping = useRef(false);
 	const revealSend = useRef<{ previous?: string } | undefined>(undefined);
 	const lastUserId = p.thread?.messages.slice().reverse().find(message => message.role === 'user')?.id;
 	const hasMessages = !!p.thread?.messages.length;
 	useLayoutEffect(() => {
 		if (!revealSend.current || lastUserId === revealSend.current.previous) return;
 		follow.current = true;
+		smoothJumping.current = false;
 		const scroll = viewport.current;
 		if (scroll) scroll.scrollTop = scroll.scrollHeight;
 		setShowJump(false);
@@ -315,7 +319,10 @@ export default function Chat(p: Props) {
 			if (scroll) scroll.scrollTop = scroll.scrollHeight;
 			revealSend.current = undefined;
 		});
-		return () => cancelAnimationFrame(frame);
+		return () => {
+			cancelAnimationFrame(frame);
+			revealSend.current = undefined;
+		};
 	}, [lastUserId]);
 	const approvalPending = isCode && !!p.approvalPrompt;
 	const queueFailures = useMemo(() => {
@@ -363,7 +370,7 @@ export default function Chat(p: Props) {
 			assertModelSupports(p.connection, p.model, 'chat', hasImages ? ['image'] : []);
 			thinkingParameters(p.connection, p.model, p.thinkingMode);
 		} catch (error) {
-			modelError = error instanceof Error ? error.message : String(error);
+			modelError = userFacingError(error);
 		}
 	}
 	useLayoutEffect(() => {
@@ -387,6 +394,8 @@ export default function Chat(p: Props) {
 		setDictationSession(undefined);
 		dictationSessionRef.current = undefined;
 		submissionScope.current = undefined;
+		revealSend.current = undefined;
+		smoothJumping.current = false;
 		follow.current = true;
 	}, [draftScope, p.draftKey]);
 	// Once the request is owned by the thread, keep its next draft editable while
@@ -499,14 +508,16 @@ export default function Chat(p: Props) {
 		},
 	});
 	async function attach(files: FileList | null) {
-		if (!files) return;
+		if (!files?.length) return;
+		const selected = Array.from(files);
+		if (fileInput.current) fileInput.current.value = '';
 		const scope = draftScope;
 		pendingAttachments.current++;
 		p.pluginSurface?.notifyDraftChanged();
 		setAttachError('');
 		try {
 			const next: Attachment[] = [];
-			for (const file of Array.from(files)) {
+			for (const file of selected) {
 				if (file.size > 20 * 1024 * 1024) throw new Error('Choose files smaller than 20 MB.');
 				if (
 					/^(audio|video)\//.test(file.type) ||
@@ -517,7 +528,12 @@ export default function Chat(p: Props) {
 					);
 				if (!file.type.startsWith('image/')) {
 					if (file.size > 200000) throw new Error('Text attachments must be smaller than 200 KB.');
-					const content = await file.text();
+					if (/\.(pdf|zip|gz|tar|7z|rar|docx|xlsx|pptx|exe|dmg|pkg|bin|wasm)$/i.test(file.name))
+						throw new Error('Attach plain text, code, or image files.');
+					const bytes = new Uint8Array(await file.arrayBuffer());
+					if (bytes.subarray(0, 8192).includes(0))
+						throw new Error('Binary files cannot be attached as text. Attach text or image files.');
+					const content = new TextDecoder('utf-8').decode(bytes);
 					next.push(textAttachment(content, file.name));
 					continue;
 				}
@@ -530,15 +546,19 @@ export default function Chat(p: Props) {
 				});
 				next.push({ name: file.name, type: file.type, dataUrl });
 			}
-			if (activeScope.current === scope) setAttachments((a) => [...a, ...next].slice(0, 6));
+			if (activeScope.current === scope) {
+				if (draftValue.current.attachments.length + next.length > 6) {
+					setAttachError('Attach up to 6 files per message.');
+				}
+				setAttachments((a) => [...a, ...next].slice(0, 6));
+			}
 		} catch (e) {
-			if (activeScope.current === scope) setAttachError(e instanceof Error ? e.message : String(e));
+			if (activeScope.current === scope) setAttachError(userFacingError(e));
 		} finally {
 			if (activeScope.current === scope) {
 				pendingAttachments.current = Math.max(0, pendingAttachments.current - 1);
 				p.pluginSurface?.notifyStateChanged();
 			}
-			if (fileInput.current) fileInput.current.value = '';
 		}
 	}
 	function replyToSelection(messageId: string, text: string) {
@@ -579,7 +599,7 @@ export default function Chat(p: Props) {
 			try {
 				p.onQueueEdit?.(editingQueueId, content, files, reference, composer);
 			} catch (error) {
-				setAttachError(error instanceof Error ? error.message : String(error));
+				setAttachError(userFacingError(error));
 				return;
 			}
 			finishQueueEdit();
@@ -607,7 +627,7 @@ export default function Chat(p: Props) {
 					!draftValue.current.replyTo
 				)
 					updateDraft(content, files, false, reference, composer);
-				setAttachError(cause instanceof Error ? cause.message : String(cause));
+				setAttachError(userFacingError(cause));
 			}
 		} finally {
 			if (activeScope.current === scope) {
@@ -618,6 +638,40 @@ export default function Chat(p: Props) {
 			}
 		}
 	}
+	const messageActionsRef = useRef({
+		onRegenerate: p.onRegenerate,
+		onRetry: p.onRetry,
+		onEditMessage: p.onEditMessage,
+		onBranch: p.onBranch,
+		onSelectVersion: p.onSelectVersion,
+		replyToSelection,
+	});
+	messageActionsRef.current = {
+		onRegenerate: p.onRegenerate,
+		onRetry: p.onRetry,
+		onEditMessage: p.onEditMessage,
+		onBranch: p.onBranch,
+		onSelectVersion: p.onSelectVersion,
+		replyToSelection,
+	};
+	const handleRetryMessage = useCallback((id: string) => {
+		if (messageActionsRef.current.onRegenerate) messageActionsRef.current.onRegenerate(id);
+		else messageActionsRef.current.onRetry?.();
+	}, []);
+	const handleEditMessage = useCallback(
+		(id: string, content: string, files: Attachment[]) =>
+			messageActionsRef.current.onEditMessage?.(id, content, files),
+		[],
+	);
+	const handleBranchMessage = useCallback((id: string) => {
+		messageActionsRef.current.onBranch?.(id);
+	}, []);
+	const handleReplyMessage = useCallback((id: string, text: string) => {
+		messageActionsRef.current.replyToSelection(id, text);
+	}, []);
+	const handleSelectMessageVersion = useCallback((id: string, direction: -1 | 1) => {
+		messageActionsRef.current.onSelectVersion?.(id, direction);
+	}, []);
 	function editQueuedMessage(id: string) {
 		const queued = p.thread?.queuedMessages?.find((message) => message.id === id);
 		if (!queued || queueEdit.current) return;
@@ -657,10 +711,24 @@ export default function Chat(p: Props) {
 			<div
 				className="chat-scroll"
 				ref={viewport}
+				onWheel={() => {
+					smoothJumping.current = false;
+				}}
+				onPointerDown={() => {
+					smoothJumping.current = false;
+				}}
+				onTouchStart={() => {
+					smoothJumping.current = false;
+				}}
 				onScroll={() => {
 					if (revealSend.current) return;
 					const v = viewport.current!;
-					follow.current = v.scrollHeight - v.scrollTop - v.clientHeight < 100;
+					const atBottom = v.scrollHeight - v.scrollTop - v.clientHeight < 100;
+					if (smoothJumping.current) {
+						if (atBottom) smoothJumping.current = false;
+						return;
+					}
+					follow.current = atBottom;
 					setShowJump(!follow.current);
 				}}
 			>
@@ -706,31 +774,21 @@ export default function Chat(p: Props) {
 										}
 										live={last && p.runningHere}
 										retryDisabled={p.busy || !!modelError}
-										onRetry={
-											message.role === 'assistant'
-												? p.onRegenerate
-													? () => p.onRegenerate?.(message.id)
-													: last
-														? p.onRetry
-														: undefined
+										onRetryMessage={
+											message.role === 'assistant' && (Boolean(p.onRegenerate) || last)
+												? handleRetryMessage
 												: undefined
 										}
-										onEdit={
-											p.onEditMessage
-												? (content, files) => p.onEditMessage?.(message.id, content, files)
-												: undefined
-										}
-										onBranch={
+										onEditMessage={p.onEditMessage ? handleEditMessage : undefined}
+										onBranchMessage={
 											message.role === 'assistant' && p.onBranch
-												? () => p.onBranch?.(message.id)
+												? handleBranchMessage
 												: undefined
 										}
-										onReply={(text) => replyToSelection(message.id, text)}
+										onReplyMessage={handleReplyMessage}
 										versions={messageVersions.get(message.id)}
-										onSelectVersion={
-											p.onSelectVersion
-												? (direction) => p.onSelectVersion?.(message.id, direction)
-												: undefined
+										onSelectMessageVersion={
+											p.onSelectVersion ? handleSelectMessageVersion : undefined
 										}
 									/>
 									{isCode &&
@@ -745,8 +803,11 @@ export default function Chat(p: Props) {
 											<div className="code-plan-action">
 												<button
 													type="button"
-													disabled={p.busy || !!modelError}
-													onClick={() => {
+													disabled={p.busy || submitting || !!modelError}
+													onClick={async () => {
+														if (submitting || p.busy) return;
+														setSubmitting(true);
+														setAttachError('');
 														updateDraft(
 															draftValue.current.content,
 															draftValue.current.attachments,
@@ -754,7 +815,13 @@ export default function Chat(p: Props) {
 															draftValue.current.replyTo,
 															{ ...composerContext, mode: undefined },
 														);
-														void p.onSend('Implement the plan above.', [], undefined, {});
+														try {
+															await p.onSend('Implement the plan above.', [], undefined, {});
+														} catch (cause) {
+															setAttachError(userFacingError(cause));
+														} finally {
+															setSubmitting(false);
+														}
 													}}
 												>
 													Implement plan
@@ -774,6 +841,8 @@ export default function Chat(p: Props) {
 					aria-label="Scroll to latest"
 					onClick={() => {
 						follow.current = true;
+						smoothJumping.current = motionScrollBehavior() === 'smooth';
+						setShowJump(false);
 						viewport.current?.scrollTo({
 							top: viewport.current.scrollHeight,
 							behavior: motionScrollBehavior(),

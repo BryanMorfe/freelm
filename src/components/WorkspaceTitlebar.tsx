@@ -86,7 +86,7 @@ export default function WorkspaceTitlebar(p: Props) {
 						className="connection-select"
 						aria-label="Active connection"
 						disabled={p.busy}
-						value={p.connection.id}
+						value={p.connection?.id ?? ''}
 						onChange={p.onConnection}
 						options={p.connections.map((connection) => ({
 							value: connection.id,

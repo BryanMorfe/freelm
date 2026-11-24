@@ -103,21 +103,32 @@ export class CustomNodeHost {
         this.workerPath
           ? path.join(path.dirname(this.workerPath), 'custom-node-compiler-worker.cjs')
           : nodeWorkerPath('compiler'),
-        { workerData: { source: pkg.source }, resourceLimits: { maxOldGenerationSizeMb: 128 } },
+        { env: {}, workerData: { source: pkg.source }, resourceLimits: { maxOldGenerationSizeMb: 128 } },
       );
+      let settled = false;
       const timer = setTimeout(() => {
+        if (settled) return;
+        settled = true;
         void worker.terminate();
         reject(new Error('Node compilation timed out.'));
       }, 30000);
       const finish = () => {
+        settled = true;
         clearTimeout(timer);
         void worker.terminate();
       };
       worker.once('error', (e) => {
+        if (settled) return;
         finish();
         reject(e);
       });
+      worker.once('exit', (code) => {
+        if (settled) return;
+        finish();
+        reject(new Error(`Node compiler exited before completion (${code}).`));
+      });
       worker.once('message', (v) => {
+        if (settled) return;
         finish();
         if (v.error) reject(new Error(v.error));
         else if (typeof v.code !== 'string' || v.code.length > 4 * 1024 * 1024)

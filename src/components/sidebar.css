@@ -2,10 +2,10 @@
 	--rail-width: 52px;
 	--history-width: 280px;
 	--titlebar-height: 44px;
-	--bg: #181818;
-	--sidebar: #202020;
-	--rail: #303030;
-	--chrome-border: #ffffff0b;
+	--bg: #121212;
+	--sidebar: #181818;
+	--rail: #202020;
+	--chrome-border: #ffffff0d;
 	grid-template-columns: calc(var(--rail-width) + var(--history-width)) minmax(0, 1fr);
 	grid-template-rows: var(--titlebar-height) minmax(0, 1fr);
 	background: var(--rail);

@@ -51,7 +51,7 @@
 	font-size: var(--font-size-ui);
 }
 .select-trigger:hover:not(:disabled) {
-	background: var(--hover);
+	background: color-mix(in srgb, var(--panel) 90%, var(--text));
 }
 .select-trigger:focus-visible,
 .switch-control:focus-visible {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	appearanceOptions,
+	appearanceSurfaceBorders,
 	defaultAppearance,
 	isAppearanceSettings,
 	normalizeAccentColor,
@@ -105,10 +106,10 @@ describe('appearance configuration', () => {
 describe('appearance color resolution', () => {
 	it('preserves the existing neutral theme colors exactly for default and legacy profiles', () => {
 		expect(resolveAppearance(undefined, 'dark')).toEqual({
-			bubble: '#2f2f2f',
+			bubble: '#242424',
 			bubbleText: '#ececec',
 			primary: '#f1f1f1',
-			onPrimary: '#171717',
+			onPrimary: '#141414',
 			accent: '#a8d6bd',
 		});
 		expect(resolveAppearance(defaultAppearance(), 'light')).toEqual({
@@ -127,7 +128,7 @@ describe('appearance color resolution', () => {
 				expect(contrast(colors.bubble, colors.bubbleText)).toBeGreaterThanOrEqual(4.5);
 				expect(contrast(colors.primary, colors.onPrimary)).toBeGreaterThanOrEqual(4.5);
 				expect(
-					contrast(colors.accent, theme === 'dark' ? '#212121' : '#ffffff'),
+					contrast(colors.accent, theme === 'dark' ? '#121212' : '#ffffff'),
 				).toBeGreaterThanOrEqual(4.5);
 				if (option.value !== 'default') {
 					expect(colors.primary).toBe(option.color);
@@ -165,5 +166,27 @@ describe('appearance color resolution', () => {
 				}
 			}
 		}
+	});
+	it('adds subtle surface borders for low-contrast accents in light and dark themes', () => {
+		const whiteOnLight = appearanceSurfaceBorders(
+			resolveAppearance({ accent: 'white', customAccent: '#ffffff' }, 'light'),
+			'light',
+		);
+		expect(whiteOnLight.primaryBorder).not.toBe('transparent');
+		expect(whiteOnLight.bubbleBorder).not.toBe('transparent');
+
+		const charcoalOnDark = appearanceSurfaceBorders(
+			resolveAppearance({ accent: 'custom', customAccent: '#141414' }, 'dark'),
+			'dark',
+		);
+		expect(charcoalOnDark.primaryBorder).not.toBe('transparent');
+		expect(charcoalOnDark.bubbleBorder).not.toBe('transparent');
+
+		const blueOnLight = appearanceSurfaceBorders(
+			resolveAppearance({ accent: 'blue', customAccent: '#2563eb' }, 'light'),
+			'light',
+		);
+		expect(blueOnLight.primaryBorder).toBe('transparent');
+		expect(blueOnLight.bubbleBorder).toBe('transparent');
 	});
 });

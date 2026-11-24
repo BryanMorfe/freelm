@@ -145,6 +145,8 @@ export class WorkspaceTransferPool {
 				pool.metadata.set(id, { value, expires: this.now() + UPLOAD_LIFETIME });
 			else {
 				const known = pool.identities.get(value);
+				if (!known && pool.strings.size >= 100_000)
+					throw new Error('Too many workspace media references. Reload FreeLM.');
 				pool.strings.set(id, known ? pool.strings.get(known)! : value);
 				if (!known) pool.identities.set(value, id);
 			}

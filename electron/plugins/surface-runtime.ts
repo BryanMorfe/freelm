@@ -85,6 +85,7 @@ export async function startPluginSurfaceRuntime(input: PluginSurfaceRuntimeInput
 		startupTimer = setTimeout(() => finish(new Error('Plugin surface activation timed out.')), Math.max(10, Math.min(input.startupTimeoutMs ?? 300_000, 900_000)));
 		try {
 			worker = new Worker(input.workerPath ?? defaultWorkerPath(), {
+				env: {},
 				workerData: { code: input.code, context: binding, cpuBudgetMs: Math.max(1, Math.min(input.cpuBudgetMs ?? 200, 1000)), jsonLimit: JSON_LIMIT },
 				resourceLimits: { maxOldGenerationSizeMb: 96, stackSizeMb: 2 },
 			});

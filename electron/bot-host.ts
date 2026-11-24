@@ -1988,6 +1988,7 @@ export class BotHost {
 			const pending = conversation.messages.findIndex((item) => item.id === job.replyId);
 			const owner = conversation.messages[pending];
 			if (owner?.status !== 'pending' || owner.notification?.id !== job.notificationId) return;
+			if (conversation.messages.length >= 20_000) return;
 			const message: BotMessage = {
 				id: sent.id,
 				role: 'bot',

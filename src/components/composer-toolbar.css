@@ -12,6 +12,13 @@
 .adaptive-composer-toolbar > .composer-tools {
 	gap: 4px;
 }
+/* Measure the complete selection before choosing a compact toolbar mode.
+   The generic picker's width cap otherwise ellipsizes the model even when
+   the composer has room for both its name and the reasoning effort. */
+.adaptive-composer-toolbar .composer-model-trigger {
+	max-width: none;
+	flex-shrink: 0;
+}
 .adaptive-composer-toolbar .composer-tools > * {
 	flex-shrink: 0;
 }

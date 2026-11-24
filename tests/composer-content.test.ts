@@ -60,6 +60,10 @@ describe('composer content', () => {
 		);
 		expect(hasMath('$x^2$')).toBe(true);
 		expect(hasMath('ordinary text')).toBe(false);
+		expect(hasMath('Costs $5 today and $10 tomorrow')).toBe(false);
+		expect(hasMath('Price is $5.00 or $10.00')).toBe(false);
+		expect(normalizeMath('```python\n\\[streaming\\]\n')).toBe('```python\n\\[streaming\\]\n');
+		expect(normalizeMath('``\\(inline\\)``')).toBe('``\\(inline\\)``');
 	});
 	it('highlights known languages and escapes source markup', () => {
 		expect(highlightCode('const answer = "<script>";', 'js')).toContain('hljs-keyword');

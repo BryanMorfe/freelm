@@ -20,17 +20,17 @@
 .hljs-keyword,
 .hljs-selector-tag,
 .hljs-literal {
-	color: #c18af3;
+	color: #c896f7;
 }
 .hljs-string,
 .hljs-regexp,
 .hljs-attribute {
-	color: #66bba8;
+	color: #72c8b4;
 }
 .hljs-number,
 .hljs-built_in,
 .hljs-type {
-	color: #d7a962;
+	color: #e2b56b;
 }
 .hljs-comment,
 .hljs-quote {
@@ -40,7 +40,27 @@
 .hljs-title,
 .hljs-function,
 .hljs-property {
-	color: #6fa9dc;
+	color: #7cb6ea;
+}
+:root[data-theme='light'] .hljs-keyword,
+:root[data-theme='light'] .hljs-selector-tag,
+:root[data-theme='light'] .hljs-literal {
+	color: #7a2da8;
+}
+:root[data-theme='light'] .hljs-string,
+:root[data-theme='light'] .hljs-regexp,
+:root[data-theme='light'] .hljs-attribute {
+	color: #166a55;
+}
+:root[data-theme='light'] .hljs-number,
+:root[data-theme='light'] .hljs-built_in,
+:root[data-theme='light'] .hljs-type {
+	color: #8f530e;
+}
+:root[data-theme='light'] .hljs-title,
+:root[data-theme='light'] .hljs-function,
+:root[data-theme='light'] .hljs-property {
+	color: #155ca3;
 }
 .message-content .katex-display {
 	overflow-x: auto;

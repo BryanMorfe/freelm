@@ -48,9 +48,12 @@ export class CompletionNotifications {
       )
         throw new Error('Invalid completion notification receipts.');
       this.receipts = value.receipts;
-    } catch (e) {
-      if ((e as NodeJS.ErrnoException).code !== 'ENOENT') throw e;
-    }
+		} catch (e) {
+			if ((e as NodeJS.ErrnoException).code !== 'ENOENT') {
+				console.error('Resetting corrupted completion notification receipts:', e);
+				this.receipts = [];
+			}
+		}
   }
   diagnostics() {
     return this.recent.map((x) => ({ ...x }));

@@ -268,7 +268,8 @@ export default function Settings({
 	const discovery = useRef<AbortController | null>(null);
 	const lastExitRequest = useRef(exitRequest);
 	const lastSectionRequest = useRef({ section: initialSection, request: sectionRequest });
-	const connection = values.connections.find((c) => c.id === values.activeConnectionId)!;
+	const connection =
+		values.connections.find((c) => c.id === values.activeConnectionId) ?? values.connections[0];
 	const dirty = baseline.current !== JSON.stringify(values);
 	const pending = dirty || catalogEditing || presetsEditing || memoryEditing;
 	const working = busy || instanceBusy || saving;
@@ -315,17 +316,25 @@ export default function Settings({
 		lastExitRequest.current = exitRequest;
 		back();
 	}, [exitRequest]);
-	useEffect(() => {
-		const escape = (event: KeyboardEvent) => {
-			if (event.key === 'Escape') {
-				event.preventDefault();
-				event.stopPropagation();
+	const escapeRef = useRef<(event: KeyboardEvent) => void>(() => {});
+	escapeRef.current = (event: KeyboardEvent) => {
+		if (event.defaultPrevented) return;
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			event.stopPropagation();
+			if (leaving) {
+				setLeaving(false);
+				onExitCancel?.();
+			} else {
 				back();
 			}
-		};
+		}
+	};
+	useEffect(() => {
+		const escape = (event: KeyboardEvent) => escapeRef.current(event);
 		window.addEventListener('keydown', escape);
 		return () => window.removeEventListener('keydown', escape);
-	});
+	}, []);
 	function navigate(next: SettingsSection) {
 		setSection(next);
 		if (leaving) onExitCancel?.();

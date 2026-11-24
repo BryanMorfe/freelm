@@ -37,9 +37,21 @@ async function readRegular(filename: string): Promise<Buffer | undefined> {
 	return readFile(filename);
 }
 async function syncDirectory(directory: string) {
-	const handle = await open(directory, 'r');
+	let handle;
+	try {
+		handle = await open(directory, 'r');
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code;
+		if (process.platform === 'win32' && (code === 'EISDIR' || code === 'EPERM' || code === 'EINVAL'))
+			return;
+		throw error;
+	}
 	try {
 		await handle.sync();
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code;
+		if (process.platform === 'win32' && (code === 'EPERM' || code === 'EINVAL')) return;
+		throw error;
 	} finally {
 		await handle.close();
 	}

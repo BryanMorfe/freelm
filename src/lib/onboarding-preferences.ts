@@ -19,15 +19,20 @@ export function onboardingSeen(store = storage()): boolean {
   }
 }
 export function finishOnboarding(store = storage()) {
+  let announcementVersion: string | null = null;
   try {
     const old = JSON.parse(store?.getItem(ONBOARDING_KEY) || 'null');
+    if (typeof old?.announcementVersion === 'string') announcementVersion = old.announcementVersion;
+  } catch {
+    // A damaged preference record must not prevent saving welcome completion.
+  }
+  try {
     store?.setItem(
       ONBOARDING_KEY,
       JSON.stringify({
         version: 1,
         welcomeVersion: ONBOARDING_VERSION,
-        announcementVersion:
-          typeof old?.announcementVersion === 'string' ? old.announcementVersion : null,
+        announcementVersion,
       }),
     );
   } catch {

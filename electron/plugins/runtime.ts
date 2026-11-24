@@ -87,6 +87,7 @@ export async function executeLocalPlugin(
 			);
 			try {
 				worker = new Worker(input.workerPath ?? pluginWorkerPath('runtime'), {
+					env: {},
 					workerData: {
 						code: input.code,
 						config,

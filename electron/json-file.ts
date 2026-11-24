@@ -5,9 +5,21 @@ import { constants as bufferLimits } from 'node:buffer';
 import { setImmediate as yieldToIo } from 'node:timers/promises';
 const MAX_BYTES = Math.min(512 * 1024 * 1024, bufferLimits.MAX_STRING_LENGTH);
 export async function syncDirectory(directory: string): Promise<void> {
-	const handle = await open(directory, 'r');
+	let handle;
+	try {
+		handle = await open(directory, 'r');
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code;
+		if (process.platform === 'win32' && (code === 'EISDIR' || code === 'EPERM' || code === 'EINVAL'))
+			return;
+		throw error;
+	}
 	try {
 		await handle.sync();
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException).code;
+		if (process.platform === 'win32' && (code === 'EPERM' || code === 'EINVAL')) return;
+		throw error;
 	} finally {
 		await handle.close();
 	}

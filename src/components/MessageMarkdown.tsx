@@ -23,21 +23,22 @@ function codeProps(children: React.ReactNode) {
 	};
 }
 
+const CODE_SPAN_OR_FENCE =
+	/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|(`+)[^`\n]*(?:(?!\1)`[^`\n]*)*\1/g;
+const CODE_OR_TEX =
+	/```[\s\S]*?(?:```|$)|~~~[\s\S]*?(?:~~~|$)|(`+)[^`\n]*(?:(?!\1)`[^`\n]*)*\1|\\\(([\s\S]*?)\\\)|\\\[([\s\S]*?)\\\]/g;
+
 export function hasMath(text: string) {
-	return /\$[^\s$][\s\S]*?\$|\$\$|\\\(|\\\[/.test(text);
+	const outsideCode = text.replace(CODE_SPAN_OR_FENCE, '');
+	return /(?<!\\)(?:\$\$|\\\(|\\\[|(?<!\d)\$(?!\s)(?:[^\n$]*?[^\s$])?\$(?!\d))/.test(outsideCode);
 }
 /** Support conventional TeX delimiters, leaving code fences and inline code untouched. */
 export function normalizeMath(text: string) {
-	return text
-		.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`[^`\n]*`)/g)
-		.map((part, index) =>
-			index % 2
-				? part
-				: part
-						.replace(/\\\(([\s\S]*?)\\\)/g, '$$$1$')
-						.replace(/\\\[([\s\S]*?)\\\]/g, (_match, body) => `\n$$\n${body}\n$$\n`),
-		)
-		.join('');
+	return text.replace(CODE_OR_TEX, (match, _tick, inlineTex, blockTex) => {
+		if (inlineTex !== undefined) return `$${inlineTex}$`;
+		if (blockTex !== undefined) return `\n$$\n${blockTex}\n$$\n`;
+		return match;
+	});
 }
 
 const MarkdownContent = memo(function MarkdownContent({

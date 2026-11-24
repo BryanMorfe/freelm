@@ -54,6 +54,6 @@
 	gap: 8px;
 }
 .code-goal-editor p {
-	color: var(--error);
+	color: var(--danger);
 	margin: 0;
 }

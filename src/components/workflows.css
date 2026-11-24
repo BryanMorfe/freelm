@@ -953,7 +953,7 @@
 	border: 1px solid var(--border);
 	border-radius: 13px;
 	text-align: left;
-	background: var(--surface);
+	background: var(--panel);
 }
 .workflow-project-card strong {
 	font-size: var(--font-size-ui);
@@ -1032,7 +1032,7 @@ button.workflow-project-card:hover {
 	font-weight: 550;
 }
 .workflow-request-composer {
-	background: var(--surface);
+	background: var(--panel);
 	border: 1px solid var(--border);
 	border-radius: 18px;
 	padding: 15px;

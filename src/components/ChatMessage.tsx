@@ -36,6 +36,8 @@ import { isVideoFile } from '../lib/generated-video';
 
 function CopyButton({ text }: { text: string }) {
 	const [copied, setCopied] = useState(false);
+	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	useEffect(() => () => clearTimeout(timer.current), []);
 	return (
 		<button
 			className="icon-button"
@@ -45,7 +47,8 @@ function CopyButton({ text }: { text: string }) {
 				try {
 					await copyToClipboard(text);
 					setCopied(true);
-					setTimeout(() => setCopied(false), 1800);
+					clearTimeout(timer.current);
+					timer.current = setTimeout(() => setCopied(false), 1800);
 				} catch {
 					setCopied(false);
 				}
@@ -93,7 +96,7 @@ const MessageBody = memo(function MessageBody({
 			? { ...message, activityFinishedAt: message.completedAt }
 			: message,
 	);
-	if (message.role !== 'assistant') return <MessageMarkdown text={message.content} />;
+	if (message.role !== 'assistant') return <MessageMarkdown text={message.content} defer={live} />;
 	const working =
 		live &&
 		!message.error &&
@@ -187,7 +190,7 @@ const MessageBody = memo(function MessageBody({
 			)}
 			{finalText && (
 				<div className="message-final" data-reply-scope="assistant-final">
-					<MessageMarkdown text={finalText} sources={research.sources} />
+					<MessageMarkdown text={finalText} sources={research.sources} defer={live} />
 				</div>
 			)}
 			<ResearchResults results={research} />
@@ -240,11 +243,16 @@ interface Props {
 	live: boolean;
 	retryDisabled: boolean;
 	onRetry?: () => void;
+	onRetryMessage?: (id: string) => void;
 	onEdit?: (content: string, attachments: Attachment[]) => void | Promise<void>;
+	onEditMessage?: (id: string, content: string, attachments: Attachment[]) => void | Promise<void>;
 	onBranch?: () => void;
+	onBranchMessage?: (id: string) => void;
 	onReply?: (text: string) => void;
+	onReplyMessage?: (id: string, text: string) => void;
 	versions?: { index: number; count: number };
 	onSelectVersion?: (direction: -1 | 1) => void;
+	onSelectMessageVersion?: (id: string, direction: -1 | 1) => void;
 }
 
 export default memo(function ChatMessage({
@@ -253,11 +261,16 @@ export default memo(function ChatMessage({
 	live,
 	retryDisabled,
 	onRetry,
+	onRetryMessage,
 	onEdit,
+	onEditMessage,
 	onBranch,
+	onBranchMessage,
 	onReply,
+	onReplyMessage,
 	versions,
 	onSelectVersion,
+	onSelectMessageVersion,
 	conversationKind = 'chat',
 	debugMode = false,
 }: Props) {
@@ -277,7 +290,12 @@ export default memo(function ChatMessage({
 	const [editError, setEditError] = useState('');
 	const [editPending, setEditPending] = useState(false);
 	const article = useRef<HTMLElement>(null);
-	const replyAllowed = assistant && !!onReply && !editing;
+	const canRetry = !!(onRetry || onRetryMessage);
+	const canEdit = !!(onEdit || onEditMessage);
+	const canBranch = !!(onBranch || onBranchMessage);
+	const canReply = !!(onReply || onReplyMessage);
+	const canSelectVersion = !!(onSelectVersion || onSelectMessageVersion);
+	const replyAllowed = assistant && canReply && !editing;
 	function selectedReply() {
 		const current = replyAllowed ? finalReplySelection(article.current) : null;
 		if (!current) {
@@ -330,9 +348,10 @@ export default memo(function ChatMessage({
 			window.removeEventListener('resize', close);
 		};
 	}, [context]);
-	const copyText = assistant
-		? splitMessageActivity(message).finalText
-		: composerVisibleText(message.content);
+	const copyText = useMemo(
+		() => (assistant ? splitMessageActivity(message).finalText : composerVisibleText(message.content)),
+		[assistant, message],
+	);
 	return (
 		<article
 			ref={article}
@@ -373,7 +392,10 @@ export default memo(function ChatMessage({
 						onPointerDown={(event) => event.preventDefault()}
 						onClick={() => {
 							const current = finalReplySelection(article.current);
-							if (current) onReply?.(current.text);
+							if (current) {
+								if (onReplyMessage) onReplyMessage(message.id, current.text);
+								else onReply?.(current.text);
+							}
 							window.getSelection()?.removeAllRanges();
 							setSelection(null);
 						}}
@@ -420,7 +442,8 @@ export default memo(function ChatMessage({
 							<button
 								role="menuitem"
 								onClick={() => {
-									onReply?.(context.replyText!);
+									if (onReplyMessage) onReplyMessage(message.id, context.replyText!);
+									else onReply?.(context.replyText!);
 									window.getSelection()?.removeAllRanges();
 									setContext(null);
 								}}
@@ -460,12 +483,14 @@ export default memo(function ChatMessage({
 					className="message-edit"
 					onSubmit={async (event) => {
 						event.preventDefault();
-						if ((!editContent.trim() && !message.attachments?.length) || !onEdit || editPending)
+						if ((!editContent.trim() && !message.attachments?.length) || !canEdit || editPending)
 							return;
 						setEditPending(true);
 						setEditError('');
 						try {
-							await onEdit(editContent.trim(), message.attachments || []);
+							if (onEditMessage)
+								await onEditMessage(message.id, editContent.trim(), message.attachments || []);
+							else await onEdit?.(editContent.trim(), message.attachments || []);
 							setEditing(false);
 						} catch (cause) {
 							setEditError(cause instanceof Error ? cause.message : String(cause));
@@ -537,11 +562,11 @@ export default memo(function ChatMessage({
 					message.error ||
 					!!message.toolCalls?.length ||
 					!!message.attachments?.length) &&
-				(assistant || onEdit || (versions?.count || 0) > 1) && (
+				(assistant || canEdit || (versions?.count || 0) > 1) && (
 					<div className="message-footer">
 						<div className="message-actions">
 							{copyText && <CopyButton text={copyText} />}
-							{!assistant && onEdit && (
+							{!assistant && canEdit && (
 								<button
 									type="button"
 									className="icon-button"
@@ -557,36 +582,45 @@ export default memo(function ChatMessage({
 									<Pencil size={15} />
 								</button>
 							)}
-							{onRetry && (
+							{canRetry && (
 								<button
 									className="icon-button"
 									aria-label="Regenerate response"
 									disabled={retryDisabled}
-									onClick={onRetry}
+									onClick={() => {
+										if (onRetryMessage) onRetryMessage(message.id);
+										else onRetry?.();
+									}}
 								>
 									<RefreshCw size={15} />
 								</button>
 							)}
-							{assistant && onBranch && (
+							{assistant && canBranch && (
 								<button
 									type="button"
 									className="icon-button"
 									aria-label="Branch conversation"
 									title="Branch conversation from here"
 									disabled={retryDisabled}
-									onClick={onBranch}
+									onClick={() => {
+										if (onBranchMessage) onBranchMessage(message.id);
+										else onBranch?.();
+									}}
 								>
 									<GitBranch size={15} />
 								</button>
 							)}
-							{versions && versions.count > 1 && onSelectVersion && (
+							{versions && versions.count > 1 && canSelectVersion && (
 								<div className="message-versions" aria-label="Message versions">
 									<button
 										type="button"
 										className="icon-button"
 										aria-label="Previous response version"
 										disabled={retryDisabled || versions.index === 0}
-										onClick={() => onSelectVersion(-1)}
+										onClick={() => {
+											if (onSelectMessageVersion) onSelectMessageVersion(message.id, -1);
+											else onSelectVersion?.(-1);
+										}}
 									>
 										<ChevronLeft size={14} />
 									</button>
@@ -598,7 +632,10 @@ export default memo(function ChatMessage({
 										className="icon-button"
 										aria-label="Next response version"
 										disabled={retryDisabled || versions.index + 1 >= versions.count}
-										onClick={() => onSelectVersion(1)}
+										onClick={() => {
+											if (onSelectMessageVersion) onSelectMessageVersion(message.id, 1);
+											else onSelectVersion?.(1);
+										}}
 									>
 										<ChevronRight size={14} />
 									</button>

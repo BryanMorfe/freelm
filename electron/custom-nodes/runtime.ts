@@ -101,6 +101,7 @@ export async function executeCustomNode(
       );
       try {
         worker = new Worker(input.workerPath ?? nodeWorkerPath('runtime'), {
+          env: {},
           workerData: {
             code: input.code,
             config,
