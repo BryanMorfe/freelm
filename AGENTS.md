@@ -18,3 +18,10 @@
 - Check running app identities before installation. Never replace a running bundle, force-quit an owner session, or bypass save/unsaved-state prompts; wait for a safe normal shutdown.
 - Preserve user data and retain a recoverable previous app bundle before replacement. Verify the installed bundle contains the validated changes and passes applicable signature/content checks, then launch it safely.
 - Use disposable profiles for automated or synthetic QA; keep owner profiles and permissions intact. Report what was built, tested, installed and opened, including any remaining blocker. Local installation does not authorize publishing, notarization uploads, paid API calls or security-permission changes.
+
+# Commits by Codex and Antigravity
+
+- Make focused commits of your own changes. Inspect the working tree and index before editing and before committing. When a file contains another contributor's edits, stage only the hunks you own.
+- Explain why the change was needed in the commit body. Record what you tested and the result, including relevant failures or checks you could not run.
+- End each agent-authored commit message with an `AI-Model: <model identifier>` Git trailer. Copy the exact identifier shown in the app you used. If the app does not expose a verifiable identifier, write `AI-Model: unknown`.
+- For an explicitly requested snapshot of mixed existing work, describe its provenance limits. A trailer identifies the agent preparing the commit and does not establish authorship of earlier uncommitted edits.
